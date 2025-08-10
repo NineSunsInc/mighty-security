@@ -103,6 +103,7 @@ yarn-error.log*
 .env.development
 .env.test
 .env.production
+.env
 
 # MacOS
 .DS_Store

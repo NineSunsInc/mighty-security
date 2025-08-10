@@ -1,6 +1,6 @@
 # MCP Security Analyzer 🛡️
 
-A comprehensive security analyzer for Model Context Protocol (MCP) tools that detects malicious patterns, vulnerabilities, and potential security threats before they compromise your AI infrastructure.
+A security analyzer for Model Context Protocol (MCP) tools that detects malicious patterns and potential security threats through static code analysis.
 
 ## 🚨 The Problem
 
@@ -11,73 +11,70 @@ MCP tools are becoming critical infrastructure for AI applications, but they pre
 - **22% leak files outside intended directories**
 - Recent exploits like the GitHub MCP vulnerability show how prompt injection can leak private data
 
-## 🚀 NEW: ML-Powered Detection
+## ✅ What This Tool Actually Detects
 
-**Now with advanced machine learning models for 95%+ threat detection!**
+### Current Detection Capabilities (Honest Assessment)
 
-- **Detection Rate**: 95%+ for known threats, 80%+ for novel attacks
-- **False Positives**: <10% with ML ensemble voting
-- **Multi-Layer Analysis**: 3-layer system with progressive depth
-- **Real-Time Protection**: <100ms average latency
-- **Zero-Day Detection**: Anomaly detection for unknown threats
+#### 1. **Command Execution Threats** (~40% coverage)
+✅ **Detects Well:**
+- `exec()` and `eval()` function calls
+- `compile()` usage
+- Some AST-based code execution patterns
 
-**Combines static analysis, AST parsing, and ML models for comprehensive protection.**
+❌ **Currently Misses:**
+- `os.system()` without specific characters
+- `subprocess` calls with `shell=True`
+- Indirect execution through variables
+- `__import__()` dynamic imports
 
-## ✅ What This Project Solves
+#### 2. **Credential Theft Patterns** (~15% coverage)
+✅ **Detects Well:**
+- Generic "file read + network send" patterns
+- Some environment variable access
 
-### Currently Detects (v1.0)
+❌ **Currently Misses:**
+- AWS credentials access via `expanduser()`
+- SSH key theft patterns
+- Docker/Kubernetes config access
+- Browser credential theft
+- Keychain/keyring access
 
-#### 1. **Command Execution Threats** (70% coverage)
-- `exec()`, `eval()`, and `compile()` usage
-- Shell command execution with `shell=True`
-- OS command injection patterns
-- Dynamic code execution
+#### 3. **Prompt Injection** (~80% coverage)
+✅ **Detects Well:**
+- Prompt injection in MCP metadata files
+- Common injection patterns in strings
+- System tag injections
 
-#### 2. **Credential Theft Patterns** (60% coverage)
-- AWS credentials access (`.aws/credentials`)
-- SSH key theft (`.ssh/id_rsa`)
-- Docker config access
-- Kubernetes config exposure
-- Environment variable extraction
-- Keyring access attempts
+❌ **Currently Misses:**
+- Sophisticated multi-step injections
+- Context-aware injections
 
-#### 3. **External Content Fetching** (90% coverage for GitHub)
-- GitHub issue/PR/comment fetching that could contain prompt injection
-- API calls that retrieve user-controlled content
-- Patterns matching the Invariant Labs GitHub vulnerability
+#### 4. **Data Exfiltration** (~30% coverage)
+✅ **Detects Well:**
+- Basic HTTP POST with data
+- Some file-to-network flows
 
-#### 4. **Data Exfiltration** (40% coverage)
-- HTTP POST/PUT of sensitive data
-- Socket-based exfiltration
-- Email-based data theft
-- FTP upload patterns
-- Base64 encoding before transmission
+❌ **Currently Misses:**
+- DNS tunneling
+- Steganography
+- Encrypted channels
+- Indirect exfiltration
 
-#### 5. **Code Obfuscation** (50% coverage)
-- Base64 encoded payloads
-- Hex encoding detection
-- High entropy code detection
-- Suspicious variable naming patterns
+#### 5. **Code Obfuscation** (~30% coverage)
+✅ **Detects Well:**
+- High entropy variable names
+- Some suspicious naming patterns
 
-### Supported Languages
-- ✅ Python
-- ✅ JavaScript/TypeScript
-- ✅ Go
-- 🚧 Rust (coming soon)
-- 🚧 Java (coming soon)
+❌ **Currently Misses:**
+- Base64 decode + exec patterns
+- Compression-based obfuscation
+- Unicode escapes
+- Most real-world obfuscation
 
-## 🎯 Real-World Threat Detection
-
-Based on recent security research, here's how we perform against known attacks:
-
-| Attack Type | Detection Status | Details |
-|-------------|-----------------|---------|
-| **GitHub MCP Vulnerability** | ✅ DETECTED | Successfully identifies the Invariant Labs reported vulnerability |
-| **Basic Command Injection** | ✅ DETECTED | Catches most exec/eval patterns |
-| **Credential Theft** | ⚠️ PARTIAL | Detects obvious patterns, may miss sophisticated attacks |
-| **RADE Attacks** | ❌ LIMITED | Emerging threat - limited detection |
-| **Tool Poisoning** | ❌ LIMITED | Rug-pull attacks mostly undetected |
-| **Directory Traversal** | ⚠️ PARTIAL | Basic detection only |
+### Overall Detection Rate: ~40%
+- Good at detecting obvious, direct threats
+- Poor at detecting sophisticated or indirect attacks
+- Many false positives on safe code
 
 ## 🚀 Quick Start
 
@@ -88,130 +85,154 @@ Based on recent security research, here's how we perform against known attacks:
 git clone https://github.com/yourusername/mcp-security-analyzer.git
 cd mcp-security-analyzer
 
-# No dependencies required - uses standard Python libraries
+# No external dependencies required - uses standard Python libraries
 ```
 
 ### Basic Usage
 
 ```bash
-# Quick test with detailed coverage report
-./enhanced_test_mcp_tool.sh https://github.com/example/mcp-tool --detailed
-
 # Analyze a GitHub repository
-python3 enhanced_mcp_analyzer.py https://github.com/example/mcp-tool
+python3 analyzers/comprehensive_mcp_analyzer.py https://github.com/example/mcp-tool
 
 # Analyze a local directory
-python3 enhanced_mcp_analyzer.py /path/to/mcp/tool
+python3 analyzers/comprehensive_mcp_analyzer.py /path/to/mcp/tool
 
-# Use runtime security hooks (best protection)
-python3 mcp_security_hooks.py
+# Analyze current directory
+python3 analyzers/comprehensive_mcp_analyzer.py .
 ```
 
 ### Example Output
 
 ```
 ======================================================================
-SECURITY ANALYSIS REPORT
+🔒 MCP SECURITY ANALYZER
 ======================================================================
 Target: https://github.com/example/mcp-tool
-Files Scanned: 15
-Confidence: 85.2%
+Mode: Deep Scan
+======================================================================
 
-📊 ASSESSMENT:
-  Threat Level: CRITICAL
-  Risk Score: 78.50%
+📊 Starting scan of 15 files...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ THREATS DETECTED: 12
+🔍 Scanning files
+   [████████████████████████████░░]  90.0% │ 14/15 files │ ETA: 1s
 
-CRITICAL SEVERITY (3 threats):
-  • EXEC:EVAL_CALL
-    Code execution via eval()
-    File: tool.py, Line: 45
-    Evidence: eval(user_input)
+📊 OVERALL ASSESSMENT
+   Threat Level: HIGH
+   Threat Score: 66.00%
+   
+⚠️ THREATS DETECTED: 8
 
-  • CREDENTIAL:ENV_SECRETS
-    Reading secrets from environment
-    File: config.py, Line: 12
-    Evidence: password = os.environ.get('API_KEY')
+   COMMAND_INJECTION (2 threats)
+      • Direct exec() usage
+        File: tool.py, Line: 45
+      • Direct eval() usage  
+        File: tool.py, Line: 89
 
-💡 SECURITY RECOMMENDATION:
-  ⛔ DO NOT USE - Critical security vulnerabilities detected
-  • Code execution capabilities detected
-  • Credential access patterns found
-  • External content fetching detected (prompt injection risk)
+💡 RECOMMENDATIONS:
+   ⚠️ HIGH RISK - Thorough review required
+   • Detected command injection risks
+   • Manual review strongly recommended
 ```
 
-## 📊 Security Coverage
+## ⚠️ Important Limitations
 
-See [MCP_Security_Coverage.md](MCP_Security_Coverage.md) for detailed coverage analysis.
+### What This Tool CANNOT Do:
 
-### Current Detection Confidence: ~40%
-- ✅ Good at detecting obvious threats
-- ⚠️ Partial coverage for sophisticated attacks
-- ❌ Missing emerging threat patterns
+1. **Runtime Analysis** - Only static code analysis, no dynamic behavior monitoring
+2. **Context Awareness** - Cannot distinguish between safe hardcoded values and dangerous user input
+3. **Data Flow Tracking** - Limited ability to follow variables through code
+4. **Sophisticated Attacks** - Misses most advanced attack patterns
+5. **Multi-file Analysis** - Limited cross-file threat detection
+
+### Known False Positives:
+- Flags standard library imports as "dangerous"
+- Marks common variable names as "suspicious"
+- Over-reports on safe operations
+
+### Known False Negatives:
+- Misses indirect command execution
+- Fails to detect most credential theft
+- Cannot detect time bombs or logic bombs
+- Misses obfuscated payloads
 
 ## 🔍 How It Works
 
-1. **Static Analysis**: Scans source code for dangerous patterns
-2. **AST Analysis**: Parses Python code to detect hidden threats
-3. **Manifest Analysis**: Checks MCP configuration for prompt injection
-4. **Pattern Matching**: Uses regex and heuristics to identify threats
-5. **Scoring Algorithm**: Weights threats based on real-world prevalence
+1. **Static Pattern Matching**: Uses regex patterns to find dangerous code
+2. **AST Analysis**: Basic Python AST parsing for some patterns
+3. **Entropy Analysis**: Detects high-entropy (obfuscated) code
+4. **File Fingerprinting**: SHA-512/SHA3-512 hashes for integrity
+5. **Basic Scoring**: Weighted threat scoring (needs improvement)
 
-## 🛠️ Advanced Features
+## 🎯 Real-World Performance
 
-### Threat Categories
-- **EXEC**: Code execution risks
-- **CREDENTIAL**: Secret/credential theft
-- **NETWORK**: Unauthorized network operations
-- **FILESYSTEM**: File system manipulation
-- **EXTERNAL**: External content fetching (prompt injection)
-- **OBFUSCATION**: Hidden/obfuscated code
-- **MCP**: MCP-specific vulnerabilities
+| Attack Type | Detection Rate | Notes |
+|-------------|---------------|-------|
+| **Direct exec/eval** | ✅ 90% | Good detection |
+| **os.system** | ❌ 10% | Poor - pattern too specific |
+| **Credential Theft** | ❌ 15% | Very limited |
+| **Prompt Injection** | ✅ 80% | Works well for metadata |
+| **Obfuscation** | ⚠️ 30% | Basic detection only |
+| **Network Backdoors** | ⚠️ 20% | Limited patterns |
+| **RADE Attacks** | ❌ 5% | Almost no detection |
+| **Tool Poisoning** | ❌ 10% | Minimal coverage |
 
-### Confidence Scoring
-Each threat is assigned a confidence score based on:
-- Pattern specificity
-- Context analysis
-- Known exploit patterns
-- False positive likelihood
+## 🛠️ Technical Details
 
-## ⚠️ Limitations
+### File Structure
+```
+analyzers/
+├── comprehensive_mcp_analyzer.py  # Main analyzer (use this)
+└── archive/                        # Old/experimental analyzers
 
-### What We DON'T Detect Well (Yet)
+examples/
+├── malicious_command_injection/    # Test cases
+├── malicious_credential_theft/
+├── malicious_obfuscated/
+└── malicious_prompt_injection/
+```
 
-1. **RADE Attacks** (10% coverage) - Hidden MCP commands in documents
-2. **Tool Poisoning** (15% coverage) - Tools that change behavior over time
-3. **Advanced SSRF** (20% coverage) - Sophisticated URL manipulation
-4. **Cross-Server Shadowing** (5% coverage) - Server impersonation
-5. **Runtime Behavior** - We only do static analysis, not runtime monitoring
+### Threat Categories Checked
+- **COMMAND_INJECTION**: exec, eval, compile
+- **CREDENTIAL_THEFT**: File access patterns
+- **DATA_EXFILTRATION**: Network operations
+- **PROMPT_INJECTION**: LLM manipulation
+- **OBFUSCATION**: Hidden/encoded threats
+- **PERSISTENCE**: Backdoor mechanisms
+- **NETWORK_BACKDOOR**: Remote access
 
 ## 🔮 Roadmap
 
-### Phase 1 (Current)
-- ✅ Basic threat detection
-- ✅ Multi-language support
-- ✅ GitHub vulnerability detection
+### Immediate Fixes Needed
+- Fix overly specific regex patterns
+- Add proper data flow analysis
+- Implement context-aware detection
+- Reduce false positive rate
 
-### Phase 2 (In Progress)
-- 🚧 RADE attack detection
-- 🚧 Enhanced URL validation
-- 🚧 Tool signature verification
+### Future Improvements
+- Add machine learning models (currently claimed but not implemented)
+- Implement runtime monitoring
+- Add multi-language support beyond Python
+- Create CI/CD integration
 
-### Phase 3 (Planned)
-- 📅 Runtime behavior monitoring
-- 📅 Machine learning-based detection
-- 📅 Integration with CI/CD pipelines
-- 📅 Real-time threat intelligence updates
+## ⚡ Performance
+
+- **Scan Speed**: ~100-200 files/second
+- **Memory Usage**: <100MB for most repos
+- **Accuracy**: ~40% detection rate (needs improvement)
+- **False Positive Rate**: ~20-30% (too high)
 
 ## 🤝 Contributing
 
-We welcome contributions! Key areas needing help:
+This tool needs significant improvements. Key areas:
 
-1. **Pattern Detection**: Add new malicious patterns
-2. **Language Support**: Add analyzers for Rust, Java, etc.
-3. **Testing**: Create test cases for edge cases
-4. **Documentation**: Improve threat descriptions
+1. **Fix Pattern Detection**: Current patterns miss obvious threats
+2. **Add Data Flow Analysis**: Track variables from source to sink
+3. **Reduce False Positives**: Better discrimination needed
+4. **Add Test Coverage**: More comprehensive test cases
+5. **Improve Documentation**: Better threat descriptions
+
+See [DETECTION_GAP_ANALYSIS.md](DETECTION_GAP_ANALYSIS.md) for detailed analysis of current gaps.
 
 ## 📚 References
 
@@ -223,17 +244,28 @@ We welcome contributions! Key areas needing help:
 
 MIT License - See LICENSE file for details
 
-## 🙏 Acknowledgments
+## ⚠️ Disclaimer
 
-- Invariant Labs for vulnerability research
-- Docker for security analysis
-- PromptHub for best practices
-- The MCP community for ongoing security discussions
+**This tool provides basic security scanning but should NOT be your only security measure.** 
 
-## 📞 Contact
+Current limitations:
+- Only ~40% detection rate for real threats
+- High false positive rate
+- Misses many sophisticated attacks
+- No runtime protection
 
-For security concerns or private vulnerability reports, please contact: [security@example.com]
+Always:
+- Manually review MCP tools before use
+- Use multiple security layers
+- Run tools in sandboxed environments
+- Monitor runtime behavior
+
+## 📞 Support
+
+For questions or security concerns:
+- Open an issue on GitHub
+- See DETECTION_GAP_ANALYSIS.md for known issues
 
 ---
 
-**Remember**: Security is a journey, not a destination. Always verify MCP tools before using them in production, even if they pass this analyzer.
+**Remember**: This tool is a work in progress with significant detection gaps. Do not rely on it as your sole security measure. Always perform manual security reviews and use defense-in-depth strategies.

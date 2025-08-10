@@ -25,6 +25,8 @@ from datetime import datetime
 from collections import Counter, defaultdict
 from enum import Enum
 import difflib
+import sys
+from threading import Lock
 
 # Advanced imports for ML and analysis
 try:
@@ -47,6 +49,171 @@ try:
 except ImportError:
     HAS_GIT = False
     git = None
+
+class ProgressTracker:
+    """Track and display progress for long-running operations"""
+    
+    def __init__(self, verbose: bool = True):
+        self.verbose = verbose
+        self.total_files = 0
+        self.processed_files = 0
+        self.current_file = ""
+        self.current_phase = ""
+        self.phase_start_time = None
+        self.scan_start_time = None
+        self.last_update_time = 0
+        self.update_interval = 0.5  # Update every 0.5 seconds
+        self.lock = Lock()
+        self.file_times = []
+        
+    def start_scan(self, total_files: int):
+        """Initialize scan progress tracking"""
+        self.total_files = total_files
+        self.processed_files = 0
+        self.scan_start_time = time.time()
+        self.phase_start_time = time.time()
+        self.file_times = []
+        if self.verbose:
+            print(f"\n📊 Starting scan of {total_files} files...")
+            print("━" * 60)
+    
+    def start_phase(self, phase_name: str, description: str = ""):
+        """Start a new analysis phase"""
+        self.current_phase = phase_name
+        self.phase_start_time = time.time()
+        if self.verbose:
+            print(f"\n🔍 {phase_name}")
+            if description:
+                print(f"   {description}")
+    
+    def update_file(self, file_path: str, file_number: int = None):
+        """Update current file being processed"""
+        with self.lock:
+            current_time = time.time()
+            
+            # Track processing time for previous file
+            if self.current_file and hasattr(self, '_file_start_time'):
+                file_time = current_time - self._file_start_time
+                if file_time < 100:  # Ignore outliers over 100 seconds
+                    self.file_times.append(file_time)
+            
+            self.current_file = file_path
+            if file_number is not None:
+                self.processed_files = file_number
+            self._file_start_time = current_time
+            
+            # Update display immediately
+            self._display_progress()
+            
+    def increment_processed(self):
+        """Increment processed files counter"""
+        with self.lock:
+            self.processed_files += 1
+    
+    def _display_progress(self):
+        """Display current progress"""
+        if not self.verbose or self.total_files == 0:
+            return
+        
+        percentage = (self.processed_files / self.total_files) * 100
+        elapsed = time.time() - self.scan_start_time if self.scan_start_time else 0
+        
+        # Estimate remaining time based on recent files
+        if self.processed_files > 1 and elapsed > 0:
+            # Use recent file times for better ETA
+            if self.file_times and len(self.file_times) > 0:
+                recent_times = self.file_times[-min(10, len(self.file_times)):]
+                avg_time_per_file = sum(recent_times) / len(recent_times)
+            else:
+                avg_time_per_file = elapsed / self.processed_files
+            
+            remaining_files = self.total_files - self.processed_files
+            eta = avg_time_per_file * remaining_files
+            eta_str = self._format_time(eta)
+        else:
+            eta_str = "calculating..."
+        
+        # Create progress bar
+        bar_width = 30
+        filled = int(bar_width * self.processed_files / self.total_files)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        
+        # Truncate filename if too long
+        max_len = 25
+        display_file = self.current_file or ""
+        if len(display_file) > max_len:
+            # Show end of filename (more useful)
+            display_file = "..." + display_file[-(max_len-3):]
+        else:
+            # Pad to maintain consistent length
+            display_file = display_file.ljust(max_len)
+        
+        # Build progress line
+        progress_line = f"  [{bar}] {percentage:5.1f}% │ {self.processed_files:3d}/{self.total_files} │ {eta_str:10s} │ {display_file}"
+        
+        # Clear entire line and write new progress
+        sys.stdout.write('\r\033[K' + progress_line)  # \033[K clears to end of line
+        sys.stdout.flush()
+    
+    def complete_phase(self, phase_name: str, summary: str = ""):
+        """Complete a phase and show summary"""
+        if self.verbose:
+            elapsed = time.time() - self.phase_start_time
+            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear progress line
+            print(f"  ✓ {phase_name} completed in {self._format_time(elapsed)}")
+            if summary:
+                print(f"    {summary}")
+    
+    def complete_scan(self):
+        """Complete the scan and show final summary"""
+        if self.verbose and self.scan_start_time:
+            total_time = time.time() - self.scan_start_time
+            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear any remaining progress
+            print("\n" + "━" * 60)
+            print(f"✅ Scan completed in {self._format_time(total_time)}")
+            print(f"   Processed {self.processed_files} files")
+            
+            if self.file_times:
+                avg_time = sum(self.file_times) / len(self.file_times)
+                print(f"   Average time per file: {self._format_time(avg_time)}")
+    
+    def _format_time(self, seconds: float) -> str:
+        """Format time in human-readable format"""
+        if seconds < 0 or seconds > 86400:  # Sanity check
+            return "calculating..."
+        elif seconds < 1:
+            return "< 1s"
+        elif seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            secs = int(seconds % 60)
+            return f"{minutes}m {secs}s"
+        else:
+            hours = int(seconds / 3600)
+            minutes = int((seconds % 3600) / 60)
+            return f"{hours}h {minutes}m"
+    
+    def log(self, message: str, level: str = "info"):
+        """Log a message without disrupting progress display"""
+        if self.verbose:
+            # Clear progress line if active
+            if self.processed_files > 0 and self.processed_files < self.total_files:
+                sys.stdout.write('\r' + ' ' * 80 + '\r')
+            
+            # Print message with appropriate prefix
+            prefixes = {
+                "info": "ℹ️",
+                "warning": "⚠️",
+                "error": "❌",
+                "success": "✅"
+            }
+            prefix = prefixes.get(level, "•")
+            print(f"  {prefix} {message}")
+            
+            # Restore progress display if needed
+            if self.processed_files > 0 and self.processed_files < self.total_files:
+                self._display_progress()
 
 class ThreatSeverity(Enum):
     """Threat severity levels"""
@@ -161,6 +328,7 @@ class ComprehensiveMCPAnalyzer:
         self.dependency_checker = DependencyVulnerabilityChecker()
         self.behavior_analyzer = BehaviorAnalyzer()
         self.data_flow_analyzer = DataFlowAnalyzer()
+        self.progress = ProgressTracker(verbose=verbose)
         
     def _load_comprehensive_patterns(self) -> Dict:
         """Load comprehensive threat detection patterns"""
@@ -312,7 +480,7 @@ class ComprehensiveMCPAnalyzer:
                     (r'zlib\.decompress.*exec', ThreatSeverity.HIGH, 0.85, "Compressed code execution"),
                     
                     # Anti-analysis
-                    (r'if\s+.*debugger.*exit', ThreatSeverity.HIGH, 0.8, "Anti-debugging"),
+                    (r'if\\s+.*debugger.*exit', ThreatSeverity.HIGH, 0.8, "Anti-debugging"),
                     (r'if.*VIRTUAL.*exit', ThreatSeverity.HIGH, 0.8, "VM detection"),
                     (r'ctypes.*IsDebuggerPresent', ThreatSeverity.HIGH, 0.85, "Debugger detection"),
                 ],
@@ -394,12 +562,17 @@ class ComprehensiveMCPAnalyzer:
         """
         Comprehensive repository analysis - handles both GitHub URLs and local directories
         """
-        self._log(f"Starting comprehensive analysis of: {repo_url}")
+        print("\n" + "="*70)
+        print("🔒 MCP SECURITY ANALYZER")
+        print("="*70)
+        print(f"Target: {repo_url}")
+        print(f"Mode: {'Deep Scan' if self.deep_scan else 'Quick Scan'}")
+        print("="*70)
         
         # Check if it's a local directory first
         local_path = Path(repo_url)
         if local_path.exists() and local_path.is_dir():
-            self._log("Analyzing local directory...")
+            self.progress.log("Analyzing local directory...", "info")
             return self._comprehensive_scan(local_path, repo_url, [])
         
         # Otherwise treat as a Git URL
@@ -408,7 +581,7 @@ class ComprehensiveMCPAnalyzer:
             history_threats = []
             
             if repo_url.startswith(('http://', 'https://', 'git@')):
-                self._log("Cloning repository...")
+                self.progress.log("Cloning repository...", "info")
                 
                 try:
                     # Try using git command directly (more reliable)
@@ -418,7 +591,7 @@ class ComprehensiveMCPAnalyzer:
                         text=True
                     )
                     if result.returncode != 0:
-                        self._log(f"Git clone failed: {result.stderr}")
+                        self.progress.log(f"Git clone failed: {result.stderr}", "error")
                         
                         # Try with gitpython if available
                         if HAS_GIT:
@@ -427,7 +600,7 @@ class ComprehensiveMCPAnalyzer:
                         else:
                             raise Exception(f"Failed to clone: {result.stderr}")
                     else:
-                        self._log("Repository cloned successfully")
+                        self.progress.log("Repository cloned successfully", "success")
                         # Try to analyze git history if gitpython is available
                         if HAS_GIT:
                             try:
@@ -437,10 +610,10 @@ class ComprehensiveMCPAnalyzer:
                                 pass
                                 
                 except FileNotFoundError:
-                    self._log("Git not found. Please install git to analyze GitHub repositories.")
+                    self.progress.log("Git not found. Please install git to analyze GitHub repositories.", "error")
                     raise Exception("Git is required to analyze GitHub repositories. Please install git.")
                 except Exception as e:
-                    self._log(f"Error accessing repository: {e}")
+                    self.progress.log(f"Error accessing repository: {e}", "error")
                     raise
             else:
                 raise Exception(f"Invalid repository URL or path: {repo_url}")
@@ -459,31 +632,115 @@ class ComprehensiveMCPAnalyzer:
         total_lines = 0
         languages = defaultdict(int)
         
-        # Build file dependency graph
+        # Count total files for progress tracking - filter more efficiently
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java', 
+                          '.cpp', '.c', '.cs', '.php', '.sh', '.rs', '.swift', '.kt'}
+        # Only scan critical config files, skip documentation
+        config_extensions = {'.json', '.toml'}  # Reduced set
+        important_files = {'mcp.json', 'package.json', 'requirements.txt', 'go.mod', 'cargo.toml'}
+        
+        all_files = list(repo_path.rglob("*"))
+        scannable_files = []
+        
+        # Prioritize code files first, then configs
+        for f in all_files:
+            if '.git' not in f.parts and f.is_file():
+                # Skip build/dist/node_modules directories
+                path_parts = set(p.lower() for p in f.parts)
+                if any(skip in path_parts for skip in {'dist', 'build', 'node_modules', 
+                                                        'vendor', 'venv', '.venv', 
+                                                        'target', 'out', 'bin', 
+                                                        'coverage', '.next', '.nuxt',
+                                                        'public', 'static', 'assets'}):
+                    continue
+                
+                # Skip hidden files except .env
+                if f.name.startswith('.') and f.name != '.env':
+                    continue
+                    
+                # Skip common non-code files
+                if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', 
+                                        '.pdf', '.zip', '.tar', '.gz', '.exe', '.dll',
+                                        '.so', '.dylib', '.woff', '.ttf', '.eot', '.min.js', '.min.css'}:
+                    continue
+                
+                # Skip very large files (>5MB)
+                try:
+                    if f.stat().st_size > 5 * 1024 * 1024:
+                        continue
+                except:
+                    pass
+                    
+                # Add if it's a code file, config, or important file
+                if (f.suffix.lower() in code_extensions or 
+                    f.suffix.lower() in config_extensions or
+                    f.name in important_files):
+                    scannable_files.append(f)
+        
+        self.progress.start_scan(len(scannable_files))
+        
+        # Phase 1: Build dependency graph (currently a stub)
+        self.progress.start_phase("Initializing scan", 
+                                 "Preparing to analyze repository...")
         dep_graph = self._build_dependency_graph(repo_path)
+        self.progress.complete_phase("Initialization", 
+                                    "Ready to scan files")
+        
+        # Phase 2: File scanning and fingerprinting
+        self.progress.start_phase("Scanning files", 
+                                 "Analyzing code patterns and generating fingerprints...")
         
         # Scan all files
-        for file_path in repo_path.rglob("*"):
-            if '.git' in file_path.parts or file_path.is_dir():
-                continue
-            
+        for idx, file_path in enumerate(scannable_files):
             relative_path = file_path.relative_to(repo_path)
+            
+            # Update progress with current file name and number (1-indexed)
+            self.progress.update_file(str(relative_path), idx + 1)
             
             # Generate fingerprints
             try:
-                with open(file_path, 'rb') as f:
-                    content = f.read()
-                    sha512 = hashlib.sha512(content).hexdigest()
-                    sha3_512 = hashlib.sha3_512(content).hexdigest()
+                # Add timeout for reading large files
+                file_size = file_path.stat().st_size
+                
+                # Skip very large files entirely
+                if file_size > 5 * 1024 * 1024:  # Skip files > 5MB
+                    self.progress.log(f"Skipping large file ({file_size/1024/1024:.1f}MB): {relative_path}", "warning")
+                    continue
                     
-                    file_fingerprints[str(relative_path)] = {
-                        'sha512': sha512,
-                        'sha3_512': sha3_512,
-                        'size': len(content),
-                        'entropy': self._calculate_entropy(content.decode('utf-8', errors='ignore'))
-                    }
+                if file_size > 1024 * 1024:  # If file > 1MB, skip complex processing
+                    with open(file_path, 'rb') as f:
+                        content = f.read(1024 * 1024)  # Read only first 1MB
+                        sha512 = hashlib.sha512(content).hexdigest()
+                        sha3_512 = hashlib.sha3_512(content).hexdigest()
+                        
+                        file_fingerprints[str(relative_path)] = {
+                            'sha512': sha512,
+                            'sha3_512': sha3_512,
+                            'size': file_size,
+                            'entropy': 0  # Skip entropy for large files
+                        }
+                else:
+                    with open(file_path, 'rb') as f:
+                        content = f.read()
+                        sha512 = hashlib.sha512(content).hexdigest()
+                        sha3_512 = hashlib.sha3_512(content).hexdigest()
+                        
+                        # Skip entropy for files > 100KB (it's very slow)
+                        entropy_val = 0
+                        if len(content) < 100 * 1024:
+                            try:
+                                entropy_val = self._calculate_entropy(content.decode('utf-8', errors='ignore'))
+                            except:
+                                entropy_val = 0
+                        
+                        file_fingerprints[str(relative_path)] = {
+                            'sha512': sha512,
+                            'sha3_512': sha3_512,
+                            'size': len(content),
+                            'entropy': entropy_val
+                        }
             except Exception as e:
-                self._log(f"Error reading {relative_path}: {e}")
+                self.progress.log(f"Error reading {relative_path}: {e}", "warning")
                 continue
             
             # Language detection
@@ -491,15 +748,19 @@ class ComprehensiveMCPAnalyzer:
             if lang:
                 languages[lang] += 1
             
-            # Deep file analysis
-            if file_path.suffix in ['.py', '.js', '.ts', '.sh', '.rb', '.go']:
-                file_threats = self._deep_file_analysis(file_path, relative_path)
-                threats.extend(file_threats)
+            # Deep file analysis - only for code files
+            code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.rb', '.go', '.java', '.php'}
+            if file_path.suffix.lower() in code_extensions:
+                # Skip if file is too large
+                if file_size < 500 * 1024:  # Only analyze files < 500KB deeply
+                    file_threats = self._deep_file_analysis(file_path, relative_path)
+                    threats.extend(file_threats)
                 
                 # Count lines
                 try:
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        total_lines += len(f.readlines())
+                        lines = f.readlines()
+                        total_lines += len(lines)
                 except:
                     pass
             
@@ -509,22 +770,41 @@ class ComprehensiveMCPAnalyzer:
                 config_threats = self._analyze_configuration(file_path, relative_path)
                 threats.extend(config_threats)
         
-        # Cross-file analysis
+        self.progress.complete_phase("File scanning", 
+                                    f"Scanned {len(file_fingerprints)} files, found {len(threats)} potential threats")
+        
+        # Phase 3: Cross-file analysis
         if self.deep_scan:
+            self.progress.start_phase("Deep analysis", 
+                                     "Performing data flow and behavioral pattern analysis...")
             # Data flow analysis
+            self.progress.log("Analyzing data flows...", "info")
             data_flows = self.data_flow_analyzer.analyze(repo_path)
             
             # Behavioral pattern analysis
+            self.progress.log("Detecting behavioral patterns...", "info")
             behavior_patterns = self.behavior_analyzer.analyze(repo_path, threats)
             
             # Supply chain analysis
+            self.progress.log("Checking dependencies for vulnerabilities...", "info")
             dependencies, vuln_deps = self.dependency_checker.check(repo_path)
+            
+            self.progress.complete_phase("Deep analysis",
+                                       f"Found {len(data_flows)} data flows, {len(behavior_patterns)} patterns")
         else:
             dependencies = {}
             vuln_deps = []
         
-        # ML-based analysis
+        # Phase 4: ML-based analysis
+        self.progress.start_phase("Machine learning analysis", 
+                                 "Running ML models for advanced threat detection...")
         ml_score, ml_explanations = self._ml_analysis(repo_path, threats, data_flows)
+        self.progress.complete_phase("ML analysis", 
+                                    f"ML maliciousness score: {ml_score:.2%}")
+        
+        # Phase 5: Final assessment
+        self.progress.start_phase("Generating report", 
+                                 "Calculating threat scores and generating recommendations...")
         
         # Generate merkle root
         merkle_root = self._generate_merkle_root(file_fingerprints)
@@ -557,6 +837,9 @@ class ComprehensiveMCPAnalyzer:
         
         master_sha512 = hashlib.sha512(master_data.encode()).hexdigest()
         master_sha3_512 = hashlib.sha3_512(master_data.encode()).hexdigest()
+        
+        self.progress.complete_phase("Report generation", "Security assessment complete")
+        self.progress.complete_scan()
         
         return SecurityReport(
             repository_url=repo_url,
@@ -591,7 +874,7 @@ class ComprehensiveMCPAnalyzer:
                 content = f.read()
                 lines = content.split('\n')
         except Exception as e:
-            self._log(f"Error reading {relative_path}: {e}")
+            # Don't log here as it would disrupt progress display
             return threats
         
         # Pattern-based detection
@@ -778,6 +1061,11 @@ class ComprehensiveMCPAnalyzer:
             self._log(f"Error analyzing git history: {e}")
         
         return threats
+    
+    def _build_dependency_graph(self, repo_path: Path):
+        """Build dependency graph (stub for now)"""
+        # TODO: Implement actual dependency analysis
+        return None
     
     def _calculate_entropy(self, text: str) -> float:
         """Calculate Shannon entropy"""
@@ -1078,10 +1366,9 @@ class ComprehensiveMCPAnalyzer:
         
         return mitigations
     
-    def _log(self, message: str):
+    def _log(self, message: str, level: str = "info"):
         """Log message if verbose"""
-        if self.verbose:
-            print(f"[ANALYZER] {message}")
+        self.progress.log(message, level)
 
 # Supporting classes
 
@@ -1288,18 +1575,25 @@ class DataFlowAnalyzer:
 
 def main():
     """Main entry point"""
-    print("="*70)
-    print("COMPREHENSIVE MCP SECURITY ANALYZER")
-    print("="*70)
-    
     if len(sys.argv) < 2:
-        print("Usage: python comprehensive_mcp_analyzer.py <github_url>")
+        print("\n📊 MCP Security Analyzer")
+        print("Usage: python comprehensive_mcp_analyzer.py <github_url_or_local_path> [--quick]")
+        print("\nExamples:")
+        print("  python comprehensive_mcp_analyzer.py https://github.com/user/repo")
+        print("  python comprehensive_mcp_analyzer.py /path/to/local/repo")
+        print("  python comprehensive_mcp_analyzer.py .  (current directory)")
+        print("  python comprehensive_mcp_analyzer.py https://github.com/user/repo --quick  (fast scan)")
+        print("\nOptions:")
+        print("  --quick  Fast scan mode (skips deep analysis for large repos)")
         sys.exit(1)
     
     repo_url = sys.argv[1]
     
+    # Check for quick mode
+    quick_mode = '--quick' in sys.argv
+    
     # Create analyzer
-    analyzer = ComprehensiveMCPAnalyzer(verbose=True, deep_scan=True)
+    analyzer = ComprehensiveMCPAnalyzer(verbose=True, deep_scan=not quick_mode)
     
     try:
         # Analyze repository
