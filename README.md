@@ -93,26 +93,62 @@ uv sync -p 3.11
 
 # Option B: pip + venv
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # IMPORTANT: Always activate the virtual environment!
 pip install -U pip
 pip install -e .
 
 # Optional: enable ML features used by src/ml/*
 pip install transformers torch sentence-transformers scikit-learn networkx gitpython
+
+# Optional: enable LLM-powered analysis (Cerebras GPT-OSS-120B)
+pip install cerebras-cloud-sdk
+# Set your API key in .env file:
+echo "CEREBRAS_API_KEY=your_api_key_here" > .env
 ```
 
 ### Basic Usage
 
+⚠️ **IMPORTANT**: Always activate the virtual environment before running the analyzer:
+
+```bash
+# Activate virtual environment first!
+source .venv/bin/activate
+```
+
+#### Standard Analysis (Pattern-based + ML)
+
 ```bash
 # Analyze a GitHub repository
-python3 analyzers/comprehensive_mcp_analyzer.py https://github.com/example/mcp-tool
+python analyzers/comprehensive_mcp_analyzer.py https://github.com/example/mcp-tool
 
 # Analyze a local directory
-python3 analyzers/comprehensive_mcp_analyzer.py /path/to/mcp/tool
+python analyzers/comprehensive_mcp_analyzer.py /path/to/mcp/tool
 
 # Analyze current directory
-python3 analyzers/comprehensive_mcp_analyzer.py .
+python analyzers/comprehensive_mcp_analyzer.py .
 ```
+
+#### Enhanced Analysis with LLM (Cerebras GPT-OSS-120B)
+
+The `--llm` flag enables AI-powered deep analysis using Cerebras' 120B parameter model for more sophisticated threat detection:
+
+```bash
+# With LLM for enhanced detection (requires CEREBRAS_API_KEY)
+python analyzers/comprehensive_mcp_analyzer.py https://github.com/example/mcp-tool --llm
+
+# Analyze local directory with LLM
+python analyzers/comprehensive_mcp_analyzer.py /path/to/mcp/tool --llm
+
+# Example: Analyze the malicious examples with LLM
+python analyzers/comprehensive_mcp_analyzer.py examples/malicious_credential_theft --llm
+```
+
+**What the --llm flag adds:**
+- 🤖 AI-powered code analysis with 64K context window
+- 🎯 Better detection of sophisticated attack patterns
+- 📊 Contextual understanding of code intent
+- 🔍 Reduced false positives through semantic analysis
+- ⚡ Smart file prioritization for efficient analysis
 
 ### Example Output
 
@@ -176,7 +212,8 @@ Mode: Deep Scan
 3. **Entropy Analysis**: Detects high-entropy (obfuscated) code
 4. **File Fingerprinting**: SHA-512/SHA3-512 hashes for integrity
 5. **Basic Scoring**: Weighted threat scoring (needs improvement)
-6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.SecurityModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints “ML Score”). Falls back to a lightweight local heuristic otherwise.
+6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.SecurityModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints "ML Score"). Falls back to a lightweight local heuristic otherwise.
+7. **LLM Integration (--llm flag)**: When enabled with Cerebras API key, uses GPT-OSS-120B for deep semantic analysis, providing contextual threat detection beyond pattern matching
 
 ## 🎯 Real-World Performance
 
@@ -197,7 +234,14 @@ Mode: Deep Scan
 ```
 analyzers/
 ├── comprehensive_mcp_analyzer.py  # Main analyzer (use this)
-└── archive/                        # Old/experimental analyzers
+├── report_formatter.py            # Comprehensive report generation
+├── shared_constants.py            # Reusable patterns and constants
+├── llm/                           # LLM integration (--llm flag)
+│   ├── cerebras_analyzer.py      # Cerebras GPT-OSS-120B integration
+│   ├── context_optimizer.py      # Smart file ranking for LLM
+│   ├── llm_integration.py        # Coordinates LLM analysis
+│   └── prompts.py                # Security-focused prompts
+└── archive/                       # Old/experimental analyzers
 
 examples/
 ├── malicious_command_injection/    # Test cases
