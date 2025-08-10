@@ -562,10 +562,24 @@ class ComprehensiveMCPAnalyzer:
         """
         Comprehensive repository analysis - handles both GitHub URLs and local directories
         """
+        # Extract display name
+        if repo_url.startswith(('http://', 'https://', 'git@')):
+            match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', repo_url)
+            if match:
+                display_name = f"{match.group(1)}/{match.group(2)}"
+            else:
+                display_name = repo_url
+        else:
+            folder_name = Path(repo_url).resolve().name
+            if folder_name == '.' or not folder_name:
+                folder_name = Path.cwd().name
+            display_name = f"Local: {folder_name}"
+        
         print("\n" + "="*70)
         print("🔒 MCP SECURITY ANALYZER")
         print("="*70)
-        print(f"Target: {repo_url}")
+        print(f"Target: {display_name}")
+        print(f"Source: {repo_url}")
         print(f"Mode: {'Deep Scan' if self.deep_scan else 'Quick Scan'}")
         print("="*70)
         
@@ -1658,8 +1672,34 @@ def main():
             for mit in report.mitigations:
                 print(f"   • {mit}")
         
-        # Save detailed report
-        report_file = f"comprehensive_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        # Create reports directory if it doesn't exist
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        
+        # Generate descriptive report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Extract repo name from URL or use local folder name
+        if repo_url.startswith(('http://', 'https://', 'git@')):
+            # Extract username/repo from GitHub URL
+            match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', repo_url)
+            if match:
+                username, reponame = match.groups()
+                report_filename = f"report_{username}-{reponame}_{timestamp}.json"
+            else:
+                # Fallback for non-GitHub URLs
+                report_filename = f"report_remote_{timestamp}.json"
+        else:
+            # Local directory - use folder name
+            folder_name = Path(repo_url).resolve().name
+            if folder_name == '.' or not folder_name:
+                folder_name = Path.cwd().name
+            # Sanitize folder name for filename
+            folder_name = re.sub(r'[^\w\-_]', '_', folder_name)
+            report_filename = f"report_local-{folder_name}_{timestamp}.json"
+        
+        # Full path to report file in reports directory
+        report_file = reports_dir / report_filename
         
         # Convert to dict for JSON serialization
         report_dict = asdict(report)
