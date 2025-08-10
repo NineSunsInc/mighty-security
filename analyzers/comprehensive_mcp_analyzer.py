@@ -28,6 +28,33 @@ import difflib
 import sys
 from threading import Lock
 
+# Import shared constants
+try:
+    # Try absolute import first
+    from analyzers.shared_constants import (
+        CODE_EXTENSIONS, CONFIG_EXTENSIONS, IMPORTANT_FILES,
+        SKIP_DIRECTORIES, SKIP_EXTENSIONS, SECURITY_FILES,
+        LANGUAGE_MAP, MAX_FILE_SIZE, MAX_ANALYSIS_SIZE, MAX_ENTROPY_SIZE,
+        SEVERITY_WEIGHTS, RISK_THRESHOLDS,
+        should_skip_file, is_code_file, is_config_file, detect_language,
+        get_scannable_files, calculate_severity_score, determine_risk_level
+    )
+    HAS_SHARED_CONSTANTS = True
+except ImportError:
+    try:
+        # Try relative import if running from analyzers directory
+        from shared_constants import (
+            CODE_EXTENSIONS, CONFIG_EXTENSIONS, IMPORTANT_FILES,
+            SKIP_DIRECTORIES, SKIP_EXTENSIONS, SECURITY_FILES,
+            LANGUAGE_MAP, MAX_FILE_SIZE, MAX_ANALYSIS_SIZE, MAX_ENTROPY_SIZE,
+            SEVERITY_WEIGHTS, RISK_THRESHOLDS,
+            should_skip_file, is_code_file, is_config_file, detect_language,
+            get_scannable_files, calculate_severity_score, determine_risk_level
+        )
+        HAS_SHARED_CONSTANTS = True
+    except ImportError:
+        HAS_SHARED_CONSTANTS = False
+
 # Advanced imports for ML and analysis
 try:
     import numpy as np
@@ -314,21 +341,62 @@ class SecurityReport:
     # Machine learning results
     ml_maliciousness_score: float = 0.0
     ml_explanations: List[str] = field(default_factory=list)
+    
+    # LLM analysis results (new fields)
+    llm_analysis: Dict[str, Any] = field(default_factory=dict)
+    advanced_ml_analysis: Dict[str, Any] = field(default_factory=dict)
+    combined_ai_assessment: Dict[str, Any] = field(default_factory=dict)
 
 class ComprehensiveMCPAnalyzer:
     """
     Advanced MCP security analyzer with comprehensive threat detection
     """
     
-    def __init__(self, verbose: bool = True, deep_scan: bool = True):
+    def __init__(self, verbose: bool = True, deep_scan: bool = True, enable_llm: bool = False):
         self.verbose = verbose
         self.deep_scan = deep_scan
+        self.enable_llm = enable_llm
         self.threat_patterns = self._load_comprehensive_patterns()
         self.ml_model = self._initialize_ml_model()
         self.dependency_checker = DependencyVulnerabilityChecker()
         self.behavior_analyzer = BehaviorAnalyzer()
         self.data_flow_analyzer = DataFlowAnalyzer()
         self.progress = ProgressTracker(verbose=verbose)
+        
+        # Initialize LLM coordinator if enabled
+        self.llm_coordinator = None
+        if enable_llm:
+            try:
+                # Try different import paths
+                try:
+                    from analyzers.llm.llm_integration import LLMAnalysisCoordinator
+                except ImportError:
+                    # Try relative import
+                    from llm.llm_integration import LLMAnalysisCoordinator
+                
+                # Try to get API key from environment or .env file
+                api_key = os.environ.get("CEREBRAS_API_KEY")
+                if not api_key:
+                    # Try loading from .env file
+                    env_file = Path(__file__).parent.parent / '.env'
+                    if env_file.exists():
+                        with open(env_file, 'r') as f:
+                            for line in f:
+                                if line.startswith('CEREBRAS_API_KEY='):
+                                    api_key = line.split('=', 1)[1].strip()
+                                    break
+                
+                if api_key:
+                    self.llm_coordinator = LLMAnalysisCoordinator(llm_provider="cerebras", api_key=api_key)
+                    self.progress.log("LLM analysis enabled with Cerebras", "success")
+                    self.progress.log(f"API Key loaded: ***{api_key[-3:]}", "info")
+                else:
+                    self.progress.log("CEREBRAS_API_KEY not found in environment or .env file", "warning")
+                    self.progress.log("LLM analysis will be disabled", "warning")
+            except ImportError as e:
+                self.progress.log(f"LLM modules not available: {e}", "warning")
+            except Exception as e:
+                self.progress.log(f"Error initializing LLM: {e}", "error")
         
     def _load_comprehensive_patterns(self) -> Dict:
         """Load comprehensive threat detection patterns"""
@@ -385,10 +453,12 @@ class ComprehensiveMCPAnalyzer:
                 'patterns': [
                     # Direct credential access
                     (r'os\.environ\[[\'"][^\'"]*(PASSWORD|KEY|TOKEN|SECRET|CREDENTIAL)', 
-                     ThreatSeverity.HIGH, 0.85, "Environment credential access"),
+                     ThreatSeverity.CRITICAL, 0.9, "Environment credential access"),
+                    (r'for\s+\w+\s+in\s+os\.environ.*?(PASSWORD|KEY|TOKEN|SECRET)',
+                     ThreatSeverity.CRITICAL, 0.95, "Scanning environment for credentials"),
                     (r'open\s*\([^)]*\.env[\'"]', ThreatSeverity.HIGH, 0.8, ".env file access"),
-                    (r'open\s*\([^)]*\.aws/credentials', ThreatSeverity.CRITICAL, 0.95, "AWS credentials access"),
-                    (r'open\s*\([^)]*\.ssh/[^)]*key', ThreatSeverity.CRITICAL, 0.95, "SSH key access"),
+                    (r'\.aws/credentials', ThreatSeverity.CRITICAL, 0.95, "AWS credentials access"),
+                    (r'\.ssh/[^\'"\s]*key', ThreatSeverity.CRITICAL, 0.95, "SSH key access"),
                     (r'open\s*\([^)]*\.docker/config', ThreatSeverity.HIGH, 0.85, "Docker config access"),
                     (r'open\s*\([^)]*\.kube/config', ThreatSeverity.HIGH, 0.85, "Kubernetes config access"),
                     
@@ -548,14 +618,12 @@ class ComprehensiveMCPAnalyzer:
         }
     
     def _initialize_ml_model(self):
-        """Initialize machine learning model for detection"""
-        # Try to import our ML models if available
+        """Initialize semantic ensemble for detection"""
+        # Prefer new semantics module; fallback to local heuristic
         try:
-            from src.ml.comprehensive_analyzer import ComprehensiveSecurityAnalyzer
-            from src.ml.model_integration import ModelEnsemble
+            from src.semantics.model_ensemble import ModelEnsemble
             return ModelEnsemble()
-        except ImportError:
-            # Fall back to simple local model
+        except Exception:
             return LocalMLModel()
     
     def analyze_repository(self, repo_url: str) -> SecurityReport:
@@ -646,50 +714,28 @@ class ComprehensiveMCPAnalyzer:
         total_lines = 0
         languages = defaultdict(int)
         
-        # Count total files for progress tracking - filter more efficiently
-        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java', 
-                          '.cpp', '.c', '.cs', '.php', '.sh', '.rs', '.swift', '.kt'}
-        # Only scan critical config files, skip documentation
-        config_extensions = {'.json', '.toml'}  # Reduced set
-        important_files = {'mcp.json', 'package.json', 'requirements.txt', 'go.mod', 'cargo.toml'}
-        
-        all_files = list(repo_path.rglob("*"))
-        scannable_files = []
-        
-        # Prioritize code files first, then configs
-        for f in all_files:
-            if '.git' not in f.parts and f.is_file():
-                # Skip build/dist/node_modules directories
-                path_parts = set(p.lower() for p in f.parts)
-                if any(skip in path_parts for skip in {'dist', 'build', 'node_modules', 
-                                                        'vendor', 'venv', '.venv', 
-                                                        'target', 'out', 'bin', 
-                                                        'coverage', '.next', '.nuxt',
-                                                        'public', 'static', 'assets'}):
-                    continue
-                
-                # Skip hidden files except .env
-                if f.name.startswith('.') and f.name != '.env':
-                    continue
-                    
-                # Skip common non-code files
-                if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', 
-                                        '.pdf', '.zip', '.tar', '.gz', '.exe', '.dll',
-                                        '.so', '.dylib', '.woff', '.ttf', '.eot', '.min.js', '.min.css'}:
-                    continue
-                
-                # Skip very large files (>5MB)
-                try:
-                    if f.stat().st_size > 5 * 1024 * 1024:
-                        continue
-                except:
-                    pass
-                    
-                # Add if it's a code file, config, or important file
-                if (f.suffix.lower() in code_extensions or 
-                    f.suffix.lower() in config_extensions or
-                    f.name in important_files):
-                    scannable_files.append(f)
+        # Use shared constants for file filtering if available
+        if HAS_SHARED_CONSTANTS:
+            scannable_files = get_scannable_files(
+                repo_path, 
+                include_configs=True, 
+                include_security=True
+            )
+        else:
+            # Minimal fallback with basic filtering
+            scannable_files = []
+            skip_dirs = {'dist', 'build', 'node_modules', '.git', 'vendor', 'venv', '.venv'}
+            
+            for ext in ['*.py', '*.js', '*.ts', '*.go', '*.java', '*.rb']:
+                for f in repo_path.rglob(ext):
+                    # Check if any skip directory is in the path
+                    path_parts = set(p.lower() for p in f.parts)
+                    if not any(skip in path_parts for skip in skip_dirs):
+                        if f.is_file() and f.stat().st_size < 5 * 1024 * 1024:  # Skip files > 5MB
+                            scannable_files.append(f)
+            
+            # Limit to reasonable number
+            scannable_files = scannable_files[:500]
         
         self.progress.start_scan(len(scannable_files))
         
@@ -717,7 +763,8 @@ class ComprehensiveMCPAnalyzer:
                 file_size = file_path.stat().st_size
                 
                 # Skip very large files entirely
-                if file_size > 5 * 1024 * 1024:  # Skip files > 5MB
+                max_size = MAX_FILE_SIZE if HAS_SHARED_CONSTANTS else 5 * 1024 * 1024
+                if file_size > max_size:
                     self.progress.log(f"Skipping large file ({file_size/1024/1024:.1f}MB): {relative_path}", "warning")
                     continue
                     
@@ -739,9 +786,10 @@ class ComprehensiveMCPAnalyzer:
                         sha512 = hashlib.sha512(content).hexdigest()
                         sha3_512 = hashlib.sha3_512(content).hexdigest()
                         
-                        # Skip entropy for files > 100KB (it's very slow)
+                        # Skip entropy for large files (it's very slow)
                         entropy_val = 0
-                        if len(content) < 100 * 1024:
+                        entropy_limit = MAX_ENTROPY_SIZE if HAS_SHARED_CONSTANTS else 100 * 1024
+                        if len(content) < entropy_limit:
                             try:
                                 entropy_val = self._calculate_entropy(content.decode('utf-8', errors='ignore'))
                             except:
@@ -758,15 +806,24 @@ class ComprehensiveMCPAnalyzer:
                 continue
             
             # Language detection
-            lang = self._detect_language(file_path)
+            if HAS_SHARED_CONSTANTS:
+                lang = detect_language(file_path)
+            else:
+                lang = self._detect_language(file_path)
             if lang:
                 languages[lang] += 1
             
             # Deep file analysis - only for code files
-            code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.rb', '.go', '.java', '.php'}
-            if file_path.suffix.lower() in code_extensions:
+            if HAS_SHARED_CONSTANTS:
+                is_code = is_code_file(file_path)
+            else:
+                # Simple fallback - just check Python and JavaScript
+                is_code = file_path.suffix.lower() in {'.py', '.js'}
+                
+            if is_code:
                 # Skip if file is too large
-                if file_size < 500 * 1024:  # Only analyze files < 500KB deeply
+                analysis_size_limit = MAX_ANALYSIS_SIZE if HAS_SHARED_CONSTANTS else 500 * 1024
+                if file_size < analysis_size_limit:
                     file_threats = self._deep_file_analysis(file_path, relative_path)
                     threats.extend(file_threats)
                 
@@ -779,8 +836,12 @@ class ComprehensiveMCPAnalyzer:
                     pass
             
             # Configuration file analysis
-            if file_path.name in ['package.json', 'setup.py', 'requirements.txt', 
-                                 'Gemfile', 'go.mod', 'cargo.toml', 'mcp.json']:
+            if HAS_SHARED_CONSTANTS:
+                is_config = is_config_file(file_path)
+            else:
+                is_config = file_path.name in ['package.json', 'setup.py', 'requirements.txt', 
+                                               'Gemfile', 'go.mod', 'cargo.toml', 'mcp.json']
+            if is_config:
                 config_threats = self._analyze_configuration(file_path, relative_path)
                 threats.extend(config_threats)
         
@@ -809,12 +870,84 @@ class ComprehensiveMCPAnalyzer:
             dependencies = {}
             vuln_deps = []
         
-        # Phase 4: ML-based analysis
-        self.progress.start_phase("Machine learning analysis", 
-                                 "Running ML models for advanced threat detection...")
-        ml_score, ml_explanations = self._ml_analysis(repo_path, threats, data_flows)
-        self.progress.complete_phase("ML analysis", 
-                                    f"ML maliciousness score: {ml_score:.2%}")
+        # Phase 4: LLM and ML-based analysis
+        llm_results = {}
+        advanced_ml_results = {}
+        combined_ai_assessment = {}
+        
+        self.progress.log(f"LLM enabled: {self.enable_llm}, Coordinator: {self.llm_coordinator is not None}", "info")
+        
+        if self.enable_llm and self.llm_coordinator:
+            self.progress.start_phase("AI-powered analysis", 
+                                     "Running LLM and ML models for advanced threat detection...")
+            
+            try:
+                # Prepare static results for LLM
+                static_results = {
+                    'threats_found': threats,
+                    'threat_score': self._calculate_comprehensive_threat_score(threats, data_flows, behavior_patterns, 0),
+                    'total_files': len(file_fingerprints),
+                    'languages': dict(languages)
+                }
+                
+                self.progress.log(f"Analyzing {len(file_fingerprints)} files with LLM...", "info")
+                
+                # Run LLM and ML analysis
+                import asyncio
+                llm_and_ml = asyncio.run(
+                    self.llm_coordinator.analyze_with_llm_and_ml(
+                        repo_path,
+                        static_results,
+                        dep_graph,  # semantic graph if available
+                        max_files=20  # Analyze top 20 files
+                    )
+                )
+                
+                llm_results = llm_and_ml.get('llm_analysis', {})
+                advanced_ml_results = llm_and_ml.get('ml_analysis', {})
+                combined_ai_assessment = llm_and_ml.get('aggregate_assessment', {})
+                
+                self.progress.log(f"LLM analyzed {combined_ai_assessment.get('files_analyzed', 0)} files", "info")
+                self.progress.log(f"Found {llm_results.get('total_findings', 0)} LLM findings", "info")
+                
+                # Add LLM-discovered threats
+                if 'individual_threats' in llm_and_ml:
+                    for llm_threat in llm_and_ml['individual_threats']:
+                        if llm_threat['source'] == 'llm' and llm_threat['severity'] in ['CRITICAL', 'HIGH']:
+                            # Convert to ThreatIndicator
+                            threats.append(ThreatIndicator(
+                                attack_vector=llm_threat['type'],  # Already a string
+                                severity=llm_threat['severity'],  # Already a string like 'CRITICAL'
+                                confidence=llm_threat.get('confidence', 0.8),
+                                file_path=llm_threat['file'],
+                                description=f"[LLM] {llm_threat['description']}",
+                                evidence={'llm_finding': llm_threat}
+                            ))
+                
+                ml_score = combined_ai_assessment.get('combined_risk', 0.0)
+                ml_explanations = [
+                    f"LLM Risk Score: {llm_results.get('aggregate_risk', 0):.2%}",
+                    f"ML Risk Score: {advanced_ml_results.get('aggregate_risk', 0):.2%}",
+                    f"Files Analyzed by AI: {combined_ai_assessment.get('files_analyzed', 0)}",
+                    f"Critical AI Findings: {combined_ai_assessment.get('critical_findings', 0)}",
+                    f"AI Verdict: {combined_ai_assessment.get('verdict', 'Unknown')}"
+                ]
+                
+                self.progress.complete_phase("AI analysis", 
+                                            f"Combined AI risk score: {ml_score:.2%}")
+            except Exception as e:
+                self.progress.log(f"LLM analysis failed: {e}", "error")
+                import traceback
+                traceback.print_exc()
+                # Fallback to basic ML
+                ml_score, ml_explanations = self._ml_analysis(repo_path, threats, data_flows)
+        else:
+            # Fallback to basic ML analysis
+            self.progress.start_phase("Machine learning analysis", 
+                                     "Running ML models for advanced threat detection...")
+            ml_score, ml_explanations = self._ml_analysis(repo_path, threats, data_flows)
+            self.progress.complete_phase("ML analysis", 
+                                        f"ML maliciousness score: {ml_score:.2%}")
         
         # Phase 5: Final assessment
         self.progress.start_phase("Generating report", 
@@ -876,7 +1009,10 @@ class ComprehensiveMCPAnalyzer:
             recommendations=recommendations,
             mitigations=mitigations,
             ml_maliciousness_score=ml_score,
-            ml_explanations=ml_explanations
+            ml_explanations=ml_explanations,
+            llm_analysis=llm_results,
+            advanced_ml_analysis=advanced_ml_results,
+            combined_ai_assessment=combined_ai_assessment
         )
     
     def _deep_file_analysis(self, file_path: Path, relative_path: Path) -> List[ThreatIndicator]:
@@ -1149,7 +1285,7 @@ class ComprehensiveMCPAnalyzer:
         return graph
     
     def _detect_language(self, file_path: Path) -> Optional[str]:
-        """Detect programming language"""
+        """Detect programming language (fallback when shared_constants not available)"""
         extension_map = {
             '.py': 'Python',
             '.js': 'JavaScript', 
@@ -1256,22 +1392,45 @@ class ComprehensiveMCPAnalyzer:
         # Calculate threat component score
         threat_score = 0.0
         if threats:
-            severity_weights = {
-                ThreatSeverity.CRITICAL: 1.0,
-                ThreatSeverity.HIGH: 0.7,
-                ThreatSeverity.MEDIUM: 0.4,
-                ThreatSeverity.LOW: 0.2,
-                ThreatSeverity.INFO: 0.1
-            }
+            # Count threats by severity
+            critical_threats = [t for t in threats if t.severity == ThreatSeverity.CRITICAL]
+            high_threats = [t for t in threats if t.severity == ThreatSeverity.HIGH]
+            medium_threats = [t for t in threats if t.severity == ThreatSeverity.MEDIUM]
+            low_threats = [t for t in threats if t.severity == ThreatSeverity.LOW]
             
-            for threat in threats:
-                threat_score += severity_weights.get(threat.severity, 0.1) * threat.confidence
+            # CRITICAL RULE: ANY critical threat means the entire project is critical
+            if critical_threats:
+                # Base score of 0.85 for ANY critical threat
+                threat_score = 0.85
+                # Add up to 0.15 based on number of critical threats
+                threat_score = min(1.0, threat_score + (len(critical_threats) - 1) * 0.05)
+            elif high_threats:
+                # High threats start at 0.6
+                threat_score = 0.6
+                # Add based on number of high threats
+                threat_score = min(0.79, threat_score + (len(high_threats) - 1) * 0.05)
+            elif medium_threats:
+                # Medium threats start at 0.4
+                threat_score = 0.4
+                # Add based on number
+                threat_score = min(0.59, threat_score + (len(medium_threats) - 1) * 0.03)
+            elif low_threats:
+                # Low threats start at 0.2
+                threat_score = 0.2
+                threat_score = min(0.39, threat_score + (len(low_threats) - 1) * 0.02)
+            else:
+                threat_score = 0.1
             
-            threat_score = min(1.0, threat_score / max(len(threats), 1))
+            # Special critical attack vectors that should ALWAYS be critical
+            critical_vectors = [
+                AttackVector.CREDENTIAL_THEFT,
+                AttackVector.COMMAND_INJECTION,
+                AttackVector.SILENT_REDEFINITION,  # Rug-pull attacks
+                AttackVector.DATA_EXFILTRATION
+            ]
             
-            # Boost for critical threats
-            if any(t.severity == ThreatSeverity.CRITICAL for t in threats):
-                threat_score = max(0.8, threat_score)
+            if any(t.attack_vector in critical_vectors for t in threats):
+                threat_score = max(0.9, threat_score)
         
         # Calculate data flow score
         flow_score = 0.0
@@ -1292,20 +1451,31 @@ class ComprehensiveMCPAnalyzer:
             weights['ml'] * ml_score
         )
         
+        # OVERRIDE: If threat score indicates critical threats, ensure final score reflects that
+        if threat_score >= 0.85:
+            # Critical threats detected - ensure final score is at least 80%
+            final_score = max(0.8, final_score)
+        elif threat_score >= 0.6:
+            # High threats detected - ensure final score is at least 60%
+            final_score = max(0.6, final_score)
+        
         return min(1.0, final_score)
     
     def _determine_threat_level(self, score: float) -> str:
         """Determine threat level from score"""
-        if score >= 0.8:
-            return 'CRITICAL'
-        elif score >= 0.6:
-            return 'HIGH'
-        elif score >= 0.4:
-            return 'MEDIUM'
-        elif score >= 0.2:
-            return 'LOW'
+        if HAS_SHARED_CONSTANTS:
+            return determine_risk_level(score)
         else:
-            return 'MINIMAL'
+            if score >= 0.8:
+                return 'CRITICAL'
+            elif score >= 0.6:
+                return 'HIGH'
+            elif score >= 0.4:
+                return 'MEDIUM'
+            elif score >= 0.2:
+                return 'LOW'
+            else:
+                return 'MINIMAL'
     
     def _calculate_confidence(self, threats: List[ThreatIndicator], 
                             total_lines: int, total_files: int) -> float:
@@ -1591,86 +1761,103 @@ def main():
     """Main entry point"""
     if len(sys.argv) < 2:
         print("\n📊 MCP Security Analyzer")
-        print("Usage: python comprehensive_mcp_analyzer.py <github_url_or_local_path> [--quick]")
+        print("Usage: python comprehensive_mcp_analyzer.py <github_url_or_local_path> [--quick] [--llm]")
         print("\nExamples:")
         print("  python comprehensive_mcp_analyzer.py https://github.com/user/repo")
         print("  python comprehensive_mcp_analyzer.py /path/to/local/repo")
         print("  python comprehensive_mcp_analyzer.py .  (current directory)")
         print("  python comprehensive_mcp_analyzer.py https://github.com/user/repo --quick  (fast scan)")
+        print("  python comprehensive_mcp_analyzer.py . --llm  (enable LLM analysis)")
         print("\nOptions:")
         print("  --quick  Fast scan mode (skips deep analysis for large repos)")
+        print("  --llm    Enable LLM-powered analysis (requires CEREBRAS_API_KEY)")
         sys.exit(1)
     
     repo_url = sys.argv[1]
     
-    # Check for quick mode
+    # Check for options
     quick_mode = '--quick' in sys.argv
+    enable_llm = '--llm' in sys.argv
     
     # Create analyzer
-    analyzer = ComprehensiveMCPAnalyzer(verbose=True, deep_scan=not quick_mode)
+    analyzer = ComprehensiveMCPAnalyzer(verbose=True, deep_scan=not quick_mode, enable_llm=enable_llm)
     
     try:
         # Analyze repository
         report = analyzer.analyze_repository(repo_url)
         
-        # Display comprehensive report
-        print("\n" + "="*70)
-        print("SECURITY ANALYSIS REPORT")
-        print("="*70)
-        
-        print(f"\n📊 OVERALL ASSESSMENT")
-        print(f"   Threat Level: {report.threat_level}")
-        print(f"   Threat Score: {report.threat_score:.2%}")
-        print(f"   Confidence: {report.confidence:.2%}")
-        print(f"   ML Score: {report.ml_maliciousness_score:.2%}")
-        
-        print(f"\n🔐 FINGERPRINTS")
-        print(f"   SHA-512: {report.sha512_fingerprint[:64]}...")
-        print(f"   SHA3-512: {report.sha3_512_fingerprint[:64]}...")
-        print(f"   Merkle Root: {report.merkle_root[:32]}...")
-        
-        print(f"\n📈 STATISTICS")
-        print(f"   Files Scanned: {report.total_files_scanned}")
-        print(f"   Lines Analyzed: {report.total_lines_analyzed:,}")
-        print(f"   Languages: {', '.join(report.languages_detected.keys())}")
-        
-        if report.threats_found:
-            print(f"\n⚠️ THREATS DETECTED: {len(report.threats_found)}")
+        # Use comprehensive report formatter
+        try:
+            from report_formatter import ComprehensiveReportFormatter
+            formatter = ComprehensiveReportFormatter()
+            print("\n" + formatter.format_report(report))
             
-            # Group by attack vector
-            by_vector = defaultdict(list)
-            for threat in report.threats_found:
-                by_vector[threat.attack_vector.value].append(threat)
+            # Skip the old format completely
+            report_displayed = True
+        except ImportError:
+            # Fallback to old format if formatter not available
+            report_displayed = False
+            print("\n" + "="*70)
+            print("SECURITY ANALYSIS REPORT")
+            print("="*70)
+        
+        if not report_displayed:
+            # Only show old format if new formatter failed
+            print(f"\n📊 OVERALL ASSESSMENT")
+            print(f"   Threat Level: {report.threat_level}")
+            print(f"   Threat Score: {report.threat_score:.2%}")
+            print(f"   Confidence: {report.confidence:.2%}")
+            print(f"   ML Score: {report.ml_maliciousness_score:.2%}")
             
-            for vector, vector_threats in by_vector.items():
-                print(f"\n   {vector.upper()} ({len(vector_threats)} threats)")
-                for threat in vector_threats[:2]:
-                    print(f"      • {threat.description}")
-                    print(f"        File: {threat.file_path}")
-                    if threat.line_numbers:
-                        print(f"        Lines: {threat.line_numbers}")
-        
-        if report.data_flows:
-            tainted = [f for f in report.data_flows if f.is_tainted]
-            if tainted:
-                print(f"\n🔄 TAINTED DATA FLOWS: {len(tainted)}")
-                for flow in tainted[:3]:
-                    print(f"   • {flow.source_type} → {flow.sink_type}")
-                    print(f"     Risk: {flow.risk_score:.2%}")
-        
-        if report.vulnerable_dependencies:
-            print(f"\n📦 VULNERABLE DEPENDENCIES: {len(report.vulnerable_dependencies)}")
-            for dep in report.vulnerable_dependencies[:3]:
-                print(f"   • {dep['package']}: {dep['description']}")
-        
-        print(f"\n💡 RECOMMENDATIONS:")
-        for rec in report.recommendations:
-            print(f"   {rec}")
-        
-        if report.mitigations:
-            print(f"\n🛡️ MITIGATIONS:")
-            for mit in report.mitigations:
-                print(f"   • {mit}")
+            print(f"\n🔐 FINGERPRINTS")
+            print(f"   SHA-512: {report.sha512_fingerprint[:64]}...")
+            print(f"   SHA3-512: {report.sha3_512_fingerprint[:64]}...")
+            print(f"   Merkle Root: {report.merkle_root[:32]}...")
+            
+            print(f"\n📈 STATISTICS")
+            print(f"   Files Scanned: {report.total_files_scanned}")
+            print(f"   Lines Analyzed: {report.total_lines_analyzed:,}")
+            print(f"   Languages: {', '.join(report.languages_detected.keys())}")
+            
+            if report.threats_found:
+                print(f"\n⚠️ THREATS DETECTED: {len(report.threats_found)}")
+                
+                # Group by attack vector
+                by_vector = defaultdict(list)
+                for threat in report.threats_found:
+                    # Handle both enum values and string values (from LLM)
+                    vector_key = threat.attack_vector.value if hasattr(threat.attack_vector, 'value') else threat.attack_vector
+                    by_vector[vector_key].append(threat)
+                
+                for vector, vector_threats in by_vector.items():
+                    print(f"\n   {vector.upper()} ({len(vector_threats)} threats)")
+                    for threat in vector_threats[:2]:
+                        print(f"      • {threat.description}")
+                        print(f"        File: {threat.file_path}")
+                        if threat.line_numbers:
+                            print(f"        Lines: {threat.line_numbers}")
+            
+            if report.data_flows:
+                tainted = [f for f in report.data_flows if f.is_tainted]
+                if tainted:
+                    print(f"\n🔄 TAINTED DATA FLOWS: {len(tainted)}")
+                    for flow in tainted[:3]:
+                        print(f"   • {flow.source_type} → {flow.sink_type}")
+                        print(f"     Risk: {flow.risk_score:.2%}")
+            
+            if report.vulnerable_dependencies:
+                print(f"\n📦 VULNERABLE DEPENDENCIES: {len(report.vulnerable_dependencies)}")
+                for dep in report.vulnerable_dependencies[:3]:
+                    print(f"   • {dep['package']}: {dep['description']}")
+            
+            print(f"\n💡 RECOMMENDATIONS:")
+            for rec in report.recommendations:
+                print(f"   {rec}")
+            
+            if report.mitigations:
+                print(f"\n🛡️ MITIGATIONS:")
+                for mit in report.mitigations:
+                    print(f"   • {mit}")
         
         # Create reports directory if it doesn't exist
         reports_dir = Path("reports")
