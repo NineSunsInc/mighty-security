@@ -85,7 +85,20 @@ MCP tools are becoming critical infrastructure for AI applications, but they pre
 git clone https://github.com/yourusername/mcp-security-analyzer.git
 cd mcp-security-analyzer
 
-# No external dependencies required - uses standard Python libraries
+# Python 3.11+
+
+# Option A: uv (recommended)
+brew install uv  # macOS
+uv sync -p 3.11
+
+# Option B: pip + venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+
+# Optional: enable ML features used by src/ml/*
+pip install transformers torch sentence-transformers scikit-learn networkx gitpython
 ```
 
 ### Basic Usage
@@ -163,6 +176,7 @@ Mode: Deep Scan
 3. **Entropy Analysis**: Detects high-entropy (obfuscated) code
 4. **File Fingerprinting**: SHA-512/SHA3-512 hashes for integrity
 5. **Basic Scoring**: Weighted threat scoring (needs improvement)
+6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.SecurityModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints “ML Score”). Falls back to a lightweight local heuristic otherwise.
 
 ## 🎯 Real-World Performance
 
@@ -232,7 +246,7 @@ This tool needs significant improvements. Key areas:
 4. **Add Test Coverage**: More comprehensive test cases
 5. **Improve Documentation**: Better threat descriptions
 
-See [DETECTION_GAP_ANALYSIS.md](DETECTION_GAP_ANALYSIS.md) for detailed analysis of current gaps.
+See [DETECTION_GAP_ANALYSIS.md](DETECTION_GAP_ANALYSIS.md) for detailed analysis of current gaps. For contribution workflow, see `CONTRIBUTION.md`.
 
 ## 📚 References
 
