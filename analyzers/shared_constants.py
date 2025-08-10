@@ -34,6 +34,50 @@ SKIP_DIRECTORIES = {
     '.git', '.svn', '.hg', '.bzr', '_darcs', '.idea', '.vscode'
 }
 
+# LLM Analysis Skip Patterns - Files to skip for LLM/error reporting (but still scan)
+LLM_SKIP_PATTERNS = [
+    # Test files
+    '_test.go', '_test.py', '_test.js', '_test.ts', '_test.rb', '_test.java',
+    '.test.js', '.test.ts', '.spec.js', '.spec.ts', '.test.py',
+    '/test/', '/tests/', '/testing/', '/__tests__/', 
+    '/e2e/', '/integration/', '/fixtures/', '/spec/', '/specs/',
+    # Package/Library directories
+    '/pkg/',          # Go packages
+    '/vendor/',       # Go/PHP/Ruby vendor
+    '/node_modules/', # JavaScript/TypeScript
+    '/lib/',          # Common library directory
+    '/libs/',         # Alternative library directory
+    '/packages/',     # Monorepo packages
+    '/third_party/',  # Third-party code
+    '/external/',     # External dependencies
+    '/deps/',         # Dependencies
+    '/dependencies/', # Dependencies
+    # Language-specific package directories
+    '/site-packages/',    # Python packages
+    '/dist-packages/',    # Python dist packages
+    '/gems/',            # Ruby gems
+    '/bower_components/', # Legacy JS
+    '/jspm_packages/',   # JSPM packages
+    '/.bundle/',         # Ruby bundle
+    '/target/',          # Java/Rust build
+    '/build/',           # Build output
+    '/dist/',            # Distribution files
+    '/out/',             # Output directory
+    '/.cargo/',          # Rust cargo
+    '/Pods/',            # iOS CocoaPods
+    '/.gradle/',         # Gradle cache
+    '/.m2/',             # Maven cache
+    '/.ivy2/',           # Ivy cache
+    '/.sbt/',            # SBT cache
+    '/composer/',        # PHP Composer
+    '/vendor/',          # PHP vendor
+]
+
+def should_skip_for_llm(file_path: str) -> bool:
+    """Check if file should be skipped for LLM analysis and error reporting"""
+    file_lower = file_path.lower()
+    return any(pattern in file_lower for pattern in LLM_SKIP_PATTERNS)
+
 # Binary and Non-Code Extensions to Skip
 SKIP_EXTENSIONS = {
     '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.bmp', '.webp',

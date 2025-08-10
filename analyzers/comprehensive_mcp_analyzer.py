@@ -532,7 +532,8 @@ class ComprehensiveMCPAnalyzer:
                     # Startup modification
                     (r'/etc/rc\.local', ThreatSeverity.CRITICAL, 0.9, "RC local modification"),
                     (r'HKEY.*CurrentVersion\\\\Run', ThreatSeverity.CRITICAL, 0.9, "Windows registry persistence"),
-                    (r'\.bashrc|\.bash_profile|\.profile', ThreatSeverity.HIGH, 0.8, "Shell profile modification"),
+                    # Use word boundaries or path separators to avoid false positives with ProfileURL, etc.
+                    (r'(^|/)\.bashrc|\.bash_profile|(^|/)\.profile\b', ThreatSeverity.HIGH, 0.8, "Shell profile modification"),
                     
                     # Service installation
                     (r'systemctl\s+enable', ThreatSeverity.HIGH, 0.8, "Systemd service"),

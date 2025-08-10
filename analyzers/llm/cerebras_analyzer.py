@@ -60,6 +60,21 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
             response_text = completion.choices[0].message.content
             parsed_response = self._parse_json_response(response_text)
             
+            # Log parsing error with file context (skip test files and pkg files)
+            if parsed_response is None and response_text:
+                # Only log for important files (not tests, packages, or vendor)
+                try:
+                    from analyzers.shared_constants import should_skip_for_llm
+                except ImportError:
+                    # Fallback import
+                    import sys
+                    from pathlib import Path
+                    sys.path.append(str(Path(__file__).parent.parent.parent))
+                    from analyzers.shared_constants import should_skip_for_llm
+                
+                if not should_skip_for_llm(request.file_path):
+                    print(f"Failed to parse JSON for {request.file_path}: Response too malformed")
+            
             # Convert to LLMFinding objects
             findings = []
             if parsed_response and 'findings' in parsed_response:
@@ -168,6 +183,33 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
             
             # Parse batch response
             response_text = completion.choices[0].message.content
+            
+            # Try to parse and log if failed
+            parsed = self._parse_json_response(response_text)
+            if parsed is None and response_text:
+                # Filter out test, package, and vendor files from the list
+                try:
+                    from analyzers.shared_constants import should_skip_for_llm
+                except ImportError:
+                    # Fallback import
+                    import sys
+                    from pathlib import Path
+                    sys.path.append(str(Path(__file__).parent.parent.parent))
+                    from analyzers.shared_constants import should_skip_for_llm
+                
+                important_files = [
+                    req.file_path.split('/')[-1] 
+                    for req in batch 
+                    if not should_skip_for_llm(req.file_path)
+                ]
+                
+                # Only log if there are important files in the batch
+                if important_files:
+                    file_list = ', '.join(important_files[:3])
+                    if len(important_files) > 3:
+                        file_list += f" and {len(important_files)-3} more"
+                    print(f"Failed to parse batch JSON for files: {file_list}")
+            
             batch_results = self._parse_batch_response(response_text, batch)
             
             return batch_results
@@ -251,10 +293,11 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
         except json.JSONDecodeError as e:
             # Only log if it's not a common issue we've already tried to fix
             if "Expecting ',' delimiter" not in str(e):
-                print(f"Failed to parse JSON response: {e}")
+                # Don't print here - will be handled by caller
+                pass
             return None
         except Exception as e:
-            print(f"Unexpected error parsing JSON: {e}")
+            # Don't print here - will be handled by caller
             return None
     
     def _parse_batch_response(self, response_text: str, batch: List[LLMRequest]) -> List[LLMResponse]:

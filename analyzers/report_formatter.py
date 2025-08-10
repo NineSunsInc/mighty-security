@@ -24,18 +24,15 @@ class ComprehensiveReportFormatter:
         # Header
         sections.append(self._format_header(report))
         
-        # Executive Summary
-        sections.append(self._format_executive_summary(report))
-        
-        # Risk Assessment Matrix
+        # Risk Assessment Matrix - FIRST to show actual findings
         sections.append(self._format_risk_matrix(report))
+        
+        # Detailed Threat Analysis - Show what was found
+        sections.append(self._format_threat_analysis(report))
         
         # AI Analysis Results (if available)
         if hasattr(report, 'llm_analysis') and report.llm_analysis:
             sections.append(self._format_ai_analysis(report))
-        
-        # Detailed Threat Analysis
-        sections.append(self._format_threat_analysis(report))
         
         # Data Flow Analysis (if available)
         if hasattr(report, 'data_flows') and report.data_flows:
@@ -54,6 +51,9 @@ class ComprehensiveReportFormatter:
         # Technical Details
         sections.append(self._format_technical_details(report))
         
+        # Executive Summary - LAST, after all analysis is complete
+        sections.append(self._format_executive_summary(report))
+        
         return "\n\n".join(filter(None, sections))
     
     def _format_header(self, report: Any) -> str:
@@ -71,10 +71,11 @@ class ComprehensiveReportFormatter:
         return "\n".join(lines)
     
     def _format_executive_summary(self, report: Any) -> str:
-        """Format executive summary section"""
+        """Format final assessment and summary section"""
         lines = []
-        lines.append("📋 EXECUTIVE SUMMARY")
-        lines.append("-" * self.width)
+        lines.append("=" * self.width)
+        lines.append("📋 FINAL ASSESSMENT & SUMMARY")
+        lines.append("=" * self.width)
         
         # Overall verdict
         threat_emoji = self._get_threat_emoji(report.threat_level)
@@ -115,18 +116,32 @@ class ComprehensiveReportFormatter:
             lines.append(f"{self.indent}• Files Analyzed by AI: {ai_assess.get('files_analyzed', 0)}")
             lines.append(f"{self.indent}• Critical AI Findings: {ai_assess.get('critical_findings', 0)}")
         
-        # Summary recommendation
-        lines.append(f"\n💡 Primary Recommendation:")
-        if report.threat_score >= 0.8:
+        # Find the highest severity in all threats
+        highest_severity = 'INFO'
+        severity_order = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'INFO': 1}
+        
+        for threat in report.threats_found:
+            threat_sev = str(threat.severity).replace('ThreatSeverity.', '')
+            if severity_order.get(threat_sev, 0) > severity_order.get(highest_severity, 0):
+                highest_severity = threat_sev
+        
+        # Summary recommendation based on HIGHEST severity found
+        lines.append(f"\n💡 Final Verdict:")
+        if highest_severity == 'CRITICAL' or report.threat_score >= 0.8:
             lines.append(f"{self.indent}⛔ DO NOT USE - Critical security issues detected")
-        elif report.threat_score >= 0.6:
+            lines.append(f"{self.indent}🔴 This code poses immediate and severe security risks")
+        elif highest_severity == 'HIGH' or report.threat_score >= 0.6:
             lines.append(f"{self.indent}⚠️ HIGH RISK - Extensive review and remediation required")
-        elif report.threat_score >= 0.4:
+            lines.append(f"{self.indent}🟠 Significant security concerns must be addressed")
+        elif highest_severity == 'MEDIUM' or report.threat_score >= 0.4:
             lines.append(f"{self.indent}⚠️ MODERATE RISK - Review and address issues before use")
+            lines.append(f"{self.indent}🟡 Several security issues need attention")
         elif report.threat_score >= 0.2:
             lines.append(f"{self.indent}ℹ️ LOW RISK - Minor issues to address")
+            lines.append(f"{self.indent}🟢 Generally safe with some improvements needed")
         else:
             lines.append(f"{self.indent}✅ MINIMAL RISK - Safe for use with standard precautions")
+            lines.append(f"{self.indent}✅ No significant security concerns identified")
         
         return "\n".join(lines)
     
@@ -136,43 +151,77 @@ class ComprehensiveReportFormatter:
         lines.append("🎯 RISK ASSESSMENT MATRIX")
         lines.append("-" * self.width)
         
-        # Create risk categories
+        # Create risk categories with count and max severity
         risk_categories = {
-            'Code Execution': 0,
-            'Data Exposure': 0,
-            'Authentication': 0,
-            'Input Validation': 0,
-            'Network Security': 0,
-            'Cryptography': 0,
-            'Configuration': 0
+            'Code Execution': {'count': 0, 'max_severity': None},
+            'Data Exposure': {'count': 0, 'max_severity': None},
+            'Authentication': {'count': 0, 'max_severity': None},
+            'Input Validation': {'count': 0, 'max_severity': None},
+            'Network Security': {'count': 0, 'max_severity': None},
+            'Cryptography': {'count': 0, 'max_severity': None},
+            'Configuration': {'count': 0, 'max_severity': None}
         }
+        
+        # Helper function to update max severity
+        def update_severity(category, threat):
+            severity_str = str(threat.severity).replace('ThreatSeverity.', '')
+            severity_order = {'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1, 'INFO': 0}
+            
+            current_max = risk_categories[category]['max_severity']
+            if current_max is None:
+                risk_categories[category]['max_severity'] = severity_str
+            else:
+                if severity_order.get(severity_str, 0) > severity_order.get(current_max, 0):
+                    risk_categories[category]['max_severity'] = severity_str
         
         # Map threats to categories
         for threat in report.threats_found:
-            vector = str(threat.attack_vector.value if hasattr(threat.attack_vector, 'value') else threat.attack_vector)
+            vector = str(threat.attack_vector.value if hasattr(threat.attack_vector, 'value') else threat.attack_vector).upper()
             
-            if 'COMMAND' in vector or 'EXEC' in vector or 'INJECTION' in vector:
-                risk_categories['Code Execution'] += 1
-            if 'DATA' in vector or 'EXFIL' in vector or 'LEAK' in vector:
-                risk_categories['Data Exposure'] += 1
-            if 'AUTH' in vector or 'PRIVILEGE' in vector:
-                risk_categories['Authentication'] += 1
-            if 'INPUT' in vector or 'VALIDATION' in vector or 'PROMPT' in vector:
-                risk_categories['Input Validation'] += 1
-            if 'NETWORK' in vector or 'REMOTE' in vector:
-                risk_categories['Network Security'] += 1
-            if 'CRYPTO' in vector or 'ENCRYPTION' in vector:
-                risk_categories['Cryptography'] += 1
-            if 'CONFIG' in vector or 'MISCONFIGURATION' in vector:
-                risk_categories['Configuration'] += 1
+            # Code Execution risks
+            if any(x in vector for x in ['COMMAND', 'EXEC', 'INJECTION', 'EVAL', 'SYSTEM']):
+                risk_categories['Code Execution']['count'] += 1
+                update_severity('Code Execution', threat)
+            
+            # Data Exposure risks
+            if any(x in vector for x in ['DATA', 'EXFIL', 'LEAK', 'CREDENTIAL', 'SECRET']):
+                risk_categories['Data Exposure']['count'] += 1
+                update_severity('Data Exposure', threat)
+            
+            # Authentication risks
+            if any(x in vector for x in ['AUTH', 'PRIVILEGE', 'ESCALATION', 'BYPASS']):
+                risk_categories['Authentication']['count'] += 1
+                update_severity('Authentication', threat)
+            
+            # Input Validation risks
+            if any(x in vector for x in ['INPUT', 'VALIDATION', 'PROMPT', 'SANITIZ']):
+                risk_categories['Input Validation']['count'] += 1
+                update_severity('Input Validation', threat)
+            
+            # Network Security risks
+            if any(x in vector for x in ['NETWORK', 'REMOTE', 'SSRF', 'REQUEST']):
+                risk_categories['Network Security']['count'] += 1
+                update_severity('Network Security', threat)
+            
+            # Cryptography risks
+            if any(x in vector for x in ['CRYPTO', 'ENCRYPTION', 'HASH', 'RANDOM']):
+                risk_categories['Cryptography']['count'] += 1
+                update_severity('Cryptography', threat)
+            
+            # Configuration risks (including obfuscation, persistence)
+            if any(x in vector for x in ['CONFIG', 'MISCONFIGURATION', 'PERMISSION', 'PERSISTENCE', 'OBFUSCAT']):
+                risk_categories['Configuration']['count'] += 1
+                update_severity('Configuration', threat)
         
         # Display matrix
         lines.append("\n┌" + "─" * 30 + "┬" + "─" * 15 + "┬" + "─" * 20 + "┐")
         lines.append("│ " + "Risk Category".ljust(28) + " │ " + "Issues Found".ljust(13) + " │ " + "Risk Level".ljust(18) + " │")
         lines.append("├" + "─" * 30 + "┼" + "─" * 15 + "┼" + "─" * 20 + "┤")
         
-        for category, count in sorted(risk_categories.items(), key=lambda x: x[1], reverse=True):
-            risk_level = self._get_risk_level_text(count)
+        for category, data in sorted(risk_categories.items(), key=lambda x: x[1]['count'], reverse=True):
+            count = data['count']
+            severity = data['max_severity']
+            risk_level = self._get_risk_level_text(count, severity)
             lines.append(f"│ {category.ljust(28)} │ {str(count).center(13)} │ {risk_level.ljust(18)} │")
         
         lines.append("└" + "─" * 30 + "┴" + "─" * 15 + "┴" + "─" * 20 + "┘")
@@ -468,15 +517,28 @@ class ComprehensiveReportFormatter:
         severity_str = str(severity.value if hasattr(severity, 'value') else severity)
         return emojis.get(severity_str.upper(), '⚪')
     
-    def _get_risk_level_text(self, count: int) -> str:
-        """Get risk level text based on count"""
+    def _get_risk_level_text(self, count: int, severity_level: str = None) -> str:
+        """Get risk level text based on count AND severity of threats"""
         if count == 0:
             return "✅ None"
-        elif count <= 2:
+        
+        # If we have severity info, use that instead of just count
+        if severity_level:
+            if severity_level == 'CRITICAL':
+                return "🔴 Critical"
+            elif severity_level == 'HIGH':
+                return "🟠 High"
+            elif severity_level == 'MEDIUM':
+                return "🟡 Medium"
+            else:
+                return "🟢 Low"
+        
+        # Fallback to count-based if no severity
+        if count <= 5:
             return "🟢 Low"
-        elif count <= 5:
-            return "🟡 Medium"
         elif count <= 10:
+            return "🟡 Medium"
+        elif count <= 20:
             return "🟠 High"
         else:
             return "🔴 Critical"

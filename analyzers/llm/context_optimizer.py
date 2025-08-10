@@ -153,6 +153,28 @@ class SmartFileRanker:
         
         ranking = FileRankingScore(file_path=file_path, total_score=0.0, importance=FileImportance.LOW)
         
+        # Deprioritize test and package files using shared constants
+        try:
+            from analyzers.shared_constants import should_skip_for_llm
+        except ImportError:
+            # Fallback import
+            import sys
+            from pathlib import Path as PathLib
+            sys.path.append(str(PathLib(__file__).parent.parent.parent))
+            from analyzers.shared_constants import should_skip_for_llm
+        
+        # Check if this file should be deprioritized
+        should_deprioritize = should_skip_for_llm(file_path)
+        
+        if should_deprioritize:
+            # Test/package/vendor files get minimal priority
+            ranking.total_score = 0.01
+            ranking.importance = FileImportance.MINIMAL
+            return ranking
+        
+        # No reduction for important files
+        priority_reduction = 1.0
+        
         # 1. Threat Score (0-1)
         if threats:
             critical = sum(1 for t in threats if self._get_severity(t) == 'CRITICAL')
@@ -215,7 +237,7 @@ class SmartFileRanker:
             weights['network'] * ranking.network_score +
             weights['obfuscation'] * ranking.obfuscation_score +
             weights['dependency'] * ranking.dependency_score
-        )
+        ) * priority_reduction  # Apply reduction for pkg files
         
         # Determine importance level
         if ranking.total_score >= 0.7:
@@ -348,6 +370,10 @@ class SmartFileRanker:
     
     def _is_code_file(self, file_path: str) -> bool:
         """Check if file is a code file"""
+        # Skip test files and vendor files
+        if any(x in file_path.lower() for x in ['_test.', '/test/', '/tests/', '/vendor/', '/.git/']):
+            return False
+            
         try:
             from analyzers.shared_constants import is_code_file
         except ImportError:
