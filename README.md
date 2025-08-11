@@ -134,7 +134,7 @@ The `--llm` flag enables AI-powered deep analysis using Cerebras' 120B parameter
 
 ```bash
 # With LLM for enhanced detection (requires CEREBRAS_API_KEY)
-python analyzers/comprehensive_mcp_analyzer.py https://github.com/example/mcp-tool --llm
+python analyzers/comprehensive_mcp_analyzer.py https://github.com/github/github-mcp-server --llm
 
 # Analyze local directory with LLM
 python analyzers/comprehensive_mcp_analyzer.py /path/to/mcp/tool --llm
