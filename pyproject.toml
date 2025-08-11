@@ -8,3 +8,8 @@ dependencies = [
     "cerebras-cloud-sdk>=1.46.0",
     "modal>=1.1.1",
 ]
+
+[tool.uv.workspace]
+members = [
+    "flask-mcp-api",
+]

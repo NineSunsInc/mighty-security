@@ -322,7 +322,6 @@ Always:
 
 For questions or security concerns:
 - Open an issue on GitHub
-- See DETECTION_GAP_ANALYSIS.md for known issues
 
 ---
 
