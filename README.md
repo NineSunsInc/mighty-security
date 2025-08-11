@@ -78,6 +78,8 @@ MCP tools are becoming critical infrastructure for AI applications, but they pre
 
 ## 🚀 Quick Start
 
+The NextJS Leaderboard and scanning codebase is located [here](https://github.com/olivercarmont/mighty-security-web-app)
+
 ### Installation
 
 ```bash
