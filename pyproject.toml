@@ -5,12 +5,22 @@ description = "A tooling for security analysis of MCP servers"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
+    "aiofiles>=23.0.0",
+    "rapidfuzz>=3.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "websockets>=11.0",
     "cerebras-cloud-sdk>=1.46.0",
     "modal>=1.1.1",
+    "python-multipart>=0.0.20",
 ]
 
 [project.scripts]
-mcp-scan = "analyzers.comprehensive_mcp_analyzer:main"
+mighty-mcp = "mighty_mcp:cli"
+mcp-scan = "src.analyzers.comprehensive_mcp_analyzer:main"
 
 [tool.uv.workspace]
 members = [
