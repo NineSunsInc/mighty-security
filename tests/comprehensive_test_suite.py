@@ -535,14 +535,13 @@ def validate_json_schema(json_data: str, schema: dict):
         
         # Import analyzers
         try:
-            from analyzers.enhanced_mcp_analyzer import EnhancedMCPAnalyzer
-            from analyzers.industry_aligned_patterns import IndustryAlignedAnalyzer
+            from analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
         except ImportError as e:
             print(f"Error importing analyzers: {e}")
             return results
         
-        enhanced_analyzer = EnhancedMCPAnalyzer()
-        industry_analyzer = IndustryAlignedAnalyzer()
+        # Create analyzer with deep scan enabled
+        analyzer = ComprehensiveMCPAnalyzer(verbose=False, deep_scan=True, enable_llm=False)
         
         # Test each case
         for example in self.test_cases:
@@ -551,63 +550,74 @@ def validate_json_schema(json_data: str, schema: dict):
             print(f"\nTesting: {example.name}")
             print(f"Category: {example.category}")
             
-            # Test with enhanced analyzer
-            enhanced_report = enhanced_analyzer._analyze_repo(case_dir, str(case_dir))
-            enhanced_detected = len(enhanced_report.threats) > 0
-            
-            # Test with industry patterns
-            code_content = (case_dir / "tool.py").read_text()
-            mcp_content = (case_dir / "mcp.json").read_text()
-            
-            industry_threats = industry_analyzer.analyze(code_content + "\n" + mcp_content)
-            industry_detected = len(industry_threats) > 0
-            
-            # Check if detection matches expectation
-            enhanced_correct = enhanced_detected == example.should_detect
-            industry_correct = industry_detected == example.should_detect
-            
-            result = {
-                'name': example.name,
-                'category': example.category,
-                'should_detect': example.should_detect,
-                'enhanced_detected': enhanced_detected,
-                'enhanced_correct': enhanced_correct,
-                'industry_detected': industry_detected,
-                'industry_correct': industry_correct,
-                'threats_found': {
-                    'enhanced': [t.type for t in enhanced_report.threats[:3]],
-                    'industry': [t.pattern_name for t in industry_threats[:3]]
+            # Test with comprehensive analyzer
+            try:
+                report = analyzer.analyze_repository(str(case_dir))
+                threats_detected = len(report.threats_found) > 0
+                
+                # Check if detection matches expectation
+                detection_correct = threats_detected == example.should_detect
+                
+                result = {
+                    'name': example.name,
+                    'category': example.category,
+                    'should_detect': example.should_detect,
+                    'detected': threats_detected,
+                    'correct': detection_correct,
+                    'threat_score': report.threat_score,
+                    'threat_level': report.threat_level,
+                    'threats_found': [
+                        {
+                            'vector': str(t.attack_vector.value) if hasattr(t.attack_vector, 'value') else str(t.attack_vector),
+                            'severity': str(t.severity.value) if hasattr(t.severity, 'value') else str(t.severity),
+                            'description': t.description[:100]
+                        }
+                        for t in report.threats_found[:3]
+                    ]
                 }
-            }
-            
-            results['detection_results'].append(result)
-            
-            # Print result
-            if enhanced_correct and industry_correct:
-                print(f"  ✅ BOTH CORRECT")
-            elif enhanced_correct:
-                print(f"  ⚠️ Only Enhanced Correct")
-            elif industry_correct:
-                print(f"  ⚠️ Only Industry Patterns Correct")
-            else:
-                print(f"  ❌ BOTH FAILED")
-            
-            if enhanced_detected:
-                print(f"  Enhanced found: {enhanced_report.threats[0].type if enhanced_report.threats else 'unknown'}")
-            if industry_detected:
-                print(f"  Industry found: {industry_threats[0].pattern_name if industry_threats else 'unknown'}")
+                
+                results['detection_results'].append(result)
+                
+                # Print result
+                if detection_correct:
+                    print(f"  ✅ CORRECT DETECTION")
+                else:
+                    if example.should_detect:
+                        print(f"  ❌ FALSE NEGATIVE - Failed to detect malicious code")
+                    else:
+                        print(f"  ❌ FALSE POSITIVE - Incorrectly flagged safe code")
+                
+                if threats_detected:
+                    print(f"  Threat Level: {report.threat_level} (Score: {report.threat_score:.2%})")
+                    if report.threats_found:
+                        threat = report.threats_found[0]
+                        vector = threat.attack_vector.value if hasattr(threat.attack_vector, 'value') else threat.attack_vector
+                        print(f"  Primary threat: {vector}")
+                        
+            except Exception as e:
+                print(f"  ❌ ERROR: {str(e)}")
+                result = {
+                    'name': example.name,
+                    'category': example.category,
+                    'should_detect': example.should_detect,
+                    'detected': False,
+                    'correct': False,
+                    'error': str(e)
+                }
+                results['detection_results'].append(result)
         
         # Calculate summary statistics
-        enhanced_accuracy = sum(1 for r in results['detection_results'] if r['enhanced_correct']) / len(self.test_cases)
-        industry_accuracy = sum(1 for r in results['detection_results'] if r['industry_correct']) / len(self.test_cases)
+        total_correct = sum(1 for r in results['detection_results'] if r.get('correct', False))
+        accuracy = total_correct / len(self.test_cases) if self.test_cases else 0
         
         results['summary'] = {
-            'enhanced_accuracy': f"{enhanced_accuracy:.1%}",
-            'industry_accuracy': f"{industry_accuracy:.1%}",
+            'accuracy': f"{accuracy:.1%}",
+            'total_correct': total_correct,
+            'total_cases': len(self.test_cases),
             'false_positives': sum(1 for r in results['detection_results'] 
-                                 if not r['should_detect'] and (r['enhanced_detected'] or r['industry_detected'])),
+                                 if not r['should_detect'] and r.get('detected', False)),
             'false_negatives': sum(1 for r in results['detection_results']
-                                 if r['should_detect'] and not (r['enhanced_detected'] or r['industry_detected'])),
+                                 if r['should_detect'] and not r.get('detected', False)),
             'categories_tested': list(set(tc.category for tc in self.test_cases))
         }
         
@@ -626,8 +636,8 @@ def validate_json_schema(json_data: str, schema: dict):
         print(f"  Categories Tested: {', '.join(results['summary']['categories_tested'])}")
         
         print(f"\n🎯 Detection Accuracy:")
-        print(f"  Enhanced Analyzer: {results['summary']['enhanced_accuracy']}")
-        print(f"  Industry Patterns: {results['summary']['industry_accuracy']}")
+        print(f"  Overall Accuracy: {results['summary']['accuracy']}")
+        print(f"  Correct Detections: {results['summary']['total_correct']}/{results['summary']['total_cases']}")
         
         print(f"\n⚠️ Error Analysis:")
         print(f"  False Positives: {results['summary']['false_positives']}")
@@ -644,15 +654,18 @@ def validate_json_schema(json_data: str, schema: dict):
             by_category[cat].append(result)
         
         for category, category_results in by_category.items():
-            correct = sum(1 for r in category_results if r['enhanced_correct'] or r['industry_correct'])
+            correct = sum(1 for r in category_results if r.get('correct', False))
             total = len(category_results)
             print(f"\n  {category}: {correct}/{total} detected correctly")
             
             for r in category_results:
-                status = "✅" if (r['enhanced_correct'] or r['industry_correct']) else "❌"
+                status = "✅" if r.get('correct', False) else "❌"
                 print(f"    {status} {r['name']}")
-                if r['threats_found']['enhanced'] or r['threats_found']['industry']:
-                    print(f"       Found: {r['threats_found']}")
+                if r.get('detected', False):
+                    print(f"       Threat Level: {r.get('threat_level', 'N/A')} (Score: {r.get('threat_score', 0):.2%})")
+                    if r.get('threats_found'):
+                        for t in r['threats_found'][:2]:
+                            print(f"       - {t.get('vector', 'Unknown')}: {t.get('description', '')[:60]}")
         
         # Save results to file
         report_file = self.test_dir / "evaluation_report.json"
@@ -682,14 +695,13 @@ def main():
     
     # Return exit code based on results
     min_accuracy = 0.8  # 80% minimum accuracy
-    enhanced_acc = float(results['summary']['enhanced_accuracy'].rstrip('%')) / 100
-    industry_acc = float(results['summary']['industry_accuracy'].rstrip('%')) / 100
+    overall_acc = float(results['summary']['accuracy'].rstrip('%')) / 100
     
-    if enhanced_acc >= min_accuracy or industry_acc >= min_accuracy:
-        print(f"✅ PASS: At least one analyzer meets {min_accuracy:.0%} accuracy threshold")
+    if overall_acc >= min_accuracy:
+        print(f"✅ PASS: Analyzer meets {min_accuracy:.0%} accuracy threshold ({results['summary']['accuracy']})")
         return 0
     else:
-        print(f"❌ FAIL: No analyzer meets {min_accuracy:.0%} accuracy threshold")
+        print(f"❌ FAIL: Analyzer does not meet {min_accuracy:.0%} accuracy threshold ({results['summary']['accuracy']})")
         return 1
 
 if __name__ == "__main__":

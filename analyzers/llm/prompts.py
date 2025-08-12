@@ -69,12 +69,43 @@ KEY THREAT VECTORS TO DETECT:
    - Anti-debugging/anti-analysis techniques
    - Polymorphic code patterns
 
+7. SSRF / UNRESTRICTED URL FETCHES
+   - Unvalidated URL inputs (http/https/file schemes)
+   - Lack of allowlists/domains and protocol checks
+   - Access to internal metadata services (e.g., 169.254.169.254)
+   - Redirect chains to untrusted hosts
+
+8. SERVER SPOOFING & CROSS-SERVER SHADOWING
+   - Unverified server identities and tool lists
+   - Overlapping tool names across servers
+   - Missing pinning/signatures for server/tool updates
+
+9. RETRIEVAL-AGENT DECEPTION (RADE)
+   - Poisoned documents that embed hidden MCP instructions
+   - Retrieval → tool chains that execute embedded commands
+   - Lack of output sanitization before re-entering model context
+
+10. DENIAL OF SERVICE / RESOURCE ABUSE
+    - Infinite or excessive tool-call loops
+    - Large payload exfiltration or flooding patterns
+    - Missing rate limits/killswitches
+
 ANALYSIS REQUIREMENTS:
 - Assign severity: CRITICAL, HIGH, MEDIUM, LOW
 - Provide specific line numbers when possible
 - Describe exploitation scenario
 - Suggest concrete remediation
 - Focus on HIGH/CRITICAL issues that pose real threats
+
+CONSTRAINTS:
+- Do NOT recommend installing or adding external libraries, packages, or tools (e.g., pip/npm/yarn/poetry/conda/brew/apt/etc.).
+- All remediation must be limited to changes within the repository's code/configuration.
+
+OUTPUT POLICY (MANDATORY):
+- Return ONLY a single JSON object matching the requested schema.
+- Do not include any prose before or after the JSON.
+- If unsure, return an empty JSON object: {}.
+- Prefer wrapping your output in a fenced code block starting with ```json and ending with ```.
 
 IMPORTANT: Be concise but thorough. Prioritize findings by actual exploitability."""
 
@@ -132,7 +163,18 @@ Look for:
 4. MCP-specific vectors:
    - Malicious tool.description fields
    - Poisoned error messages
-   - Crafted resource identifiers""",
+   - Crafted resource identifiers
+
+5. Retrieval-Agent Deception (RADE):
+   - Poisoned documents that embed MCP commands or shell snippets
+   - Retrieval tool → file/search → outbound post tool-chains
+   - Hidden instructions that trigger multi-tool sequences
+   - Outputs re-entering context without sanitization
+
+Provide:
+- Detection signals: concrete patterns, regex, or AST cues
+- Resolution: specific fixes (escape, sanitize, strip, schema-validate)
+- Reinforcements: allowlists, max token/length caps, output scrubbing, role separation, provenance checks""",
 
             ThreatCategory.COMMAND_INJECTION: """
 FOCUS: Command Injection Vulnerabilities
@@ -177,17 +219,50 @@ Look for:
    - Timing-based exfiltration
    - Steganography in images/files
 
-3. Data collection:
+3. SSRF / Unrestricted URL Fetches:
+   - Direct use of user-supplied URLs in requests/fetchers
+   - Missing domain/protocol allowlists
+   - Special IP ranges (link-local, private, metadata services)
+   - Blind redirects to untrusted hosts
+
+4. Data collection:
    - File system traversal
    - Environment variable dumps
    - Process listing/memory access
    - Browser data access
 
-4. MCP-specific risks:
+5. MCP-specific risks:
    - Tools accessing user files
    - Credential scanning
    - Conversation history access
    - Model output manipulation""",
+
+            ThreatCategory.SUPPLY_CHAIN: """
+FOCUS: Supply Chain & Server Integrity
+
+Look for:
+1. Server spoofing / impersonation:
+   - Unverified server identity or certificate pinning
+   - Tool lists that mimic trusted servers but differ in behavior
+
+2. Version pinning and update integrity:
+   - Lack of pinned tool/server versions
+   - Missing signature/hash verification on updates
+   - Silent redefinition of tools between versions (rug-pull)
+
+3. Cross-server tool shadowing:
+   - Overlapping tool names where a rogue server overrides behavior
+   - Missing explicit server scoping/qualification in tool calls
+
+4. Remediation guidance:
+   - Enforce version pinning and signed updates
+   - Qualify server identity per call; verify TLS and fingerprints
+   - Disallow ambiguous tool resolution across servers
+
+Provide:
+- Detection signals: where identity/version checks are missing
+- Resolution: pin versions, add signature/hash verification
+- Reinforcements: enforce server/tool allowlists; reject ambiguous tool names""",
 
             ThreatCategory.CREDENTIAL_THEFT: """
 FOCUS: Credential Theft Patterns
@@ -285,8 +360,10 @@ CODE TO ANALYZE:
 {code}
 ```
 
-ANALYSIS OUTPUT FORMAT:
-Provide findings in this JSON structure:
+ANALYSIS OUTPUT FORMAT (STRICT):
+Return ONLY a single JSON object in a fenced JSON block. Do not include any text before or after.
+Example:
+```json
 {{
     "findings": [
         {{
@@ -302,8 +379,15 @@ Provide findings in this JSON structure:
     "risk_score": 0.0-1.0,
     "summary": "brief overall assessment"
 }}
+```
 
-Focus on real, exploitable vulnerabilities. Avoid false positives.""")
+If you cannot produce a valid JSON object for any reason, return:
+```json
+{{}}
+```
+
+Focus on real, exploitable vulnerabilities. Avoid false positives.
+Strictly avoid suggesting new dependencies or package installation commands in remediation or summary.""")
         
         return "\n".join(prompt_parts)
 
@@ -330,6 +414,7 @@ For each snippet, identify HIGH/CRITICAL vulnerabilities related to:
 - Data exfiltration
 - Credential theft
 
-Return a JSON array with findings for each snippet."""
+Return ONLY a JSON array (and nothing else). Wrap it in a fenced json code block.
+"""
         
         return prompt

@@ -20,14 +20,64 @@ import time
 import traceback
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set, Any
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from datetime import datetime
 from collections import Counter, defaultdict
-from enum import Enum
 import difflib
-import sys
-from threading import Lock
 
+# Composable components
+try:
+    from analyzers.comprehensive import (
+        ThreatSeverity,
+        AttackVector,
+        ThreatIndicator,
+        DataFlow,
+        BehaviorPattern,
+        SecurityReport,
+        ProgressTracker,
+        LocalMLModel,
+        DependencyVulnerabilityChecker,
+        BehaviorAnalyzer,
+        DataFlowAnalyzer,
+        get_threat_patterns,
+    )
+except ModuleNotFoundError:
+    # Allow running as: python analyzers/comprehensive_mcp_analyzer.py ...
+    # by adding the project root to sys.path
+    project_root = Path(__file__).resolve().parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    from analyzers.comprehensive import (
+        ThreatSeverity,
+        AttackVector,
+        ThreatIndicator,
+        DataFlow,
+        BehaviorPattern,
+        SecurityReport,
+        ProgressTracker,
+        LocalMLModel,
+        DependencyVulnerabilityChecker,
+        BehaviorAnalyzer,
+        DataFlowAnalyzer,
+        get_threat_patterns,
+    )
+
+# Optional advanced analyzers (taint and security rules)
+try:
+    from analyzers.taint.call_graph import build_call_graph as build_taint_call_graph
+    from analyzers.taint.taint_engine import analyze as taint_analyze
+    from analyzers.taint.types import FlowTrace, TaintKind
+    TAINT_AVAILABLE = True
+except Exception:
+    TAINT_AVAILABLE = False
+    FlowTrace = None
+    TaintKind = None
+
+try:
+    from analyzers.security import url_rules, credential_rules
+    SECURITY_RULES_AVAILABLE = True
+except Exception:
+    SECURITY_RULES_AVAILABLE = False
 # Import shared constants
 try:
     # Try absolute import first
@@ -77,275 +127,8 @@ except ImportError:
     HAS_GIT = False
     git = None
 
-class ProgressTracker:
-    """Track and display progress for long-running operations"""
-    
-    def __init__(self, verbose: bool = True):
-        self.verbose = verbose
-        self.total_files = 0
-        self.processed_files = 0
-        self.current_file = ""
-        self.current_phase = ""
-        self.phase_start_time = None
-        self.scan_start_time = None
-        self.last_update_time = 0
-        self.update_interval = 0.5  # Update every 0.5 seconds
-        self.lock = Lock()
-        self.file_times = []
-        
-    def start_scan(self, total_files: int):
-        """Initialize scan progress tracking"""
-        self.total_files = total_files
-        self.processed_files = 0
-        self.scan_start_time = time.time()
-        self.phase_start_time = time.time()
-        self.file_times = []
-        if self.verbose:
-            print(f"\n📊 Starting scan of {total_files} files...")
-            print("━" * 60)
-    
-    def start_phase(self, phase_name: str, description: str = ""):
-        """Start a new analysis phase"""
-        self.current_phase = phase_name
-        self.phase_start_time = time.time()
-        if self.verbose:
-            print(f"\n🔍 {phase_name}")
-            if description:
-                print(f"   {description}")
-    
-    def update_file(self, file_path: str, file_number: int = None):
-        """Update current file being processed"""
-        with self.lock:
-            current_time = time.time()
-            
-            # Track processing time for previous file
-            if self.current_file and hasattr(self, '_file_start_time'):
-                file_time = current_time - self._file_start_time
-                if file_time < 100:  # Ignore outliers over 100 seconds
-                    self.file_times.append(file_time)
-            
-            self.current_file = file_path
-            if file_number is not None:
-                self.processed_files = file_number
-            self._file_start_time = current_time
-            
-            # Update display immediately
-            self._display_progress()
-            
-    def increment_processed(self):
-        """Increment processed files counter"""
-        with self.lock:
-            self.processed_files += 1
-    
-    def _display_progress(self):
-        """Display current progress"""
-        if not self.verbose or self.total_files == 0:
-            return
-        
-        percentage = (self.processed_files / self.total_files) * 100
-        elapsed = time.time() - self.scan_start_time if self.scan_start_time else 0
-        
-        # Estimate remaining time based on recent files
-        if self.processed_files > 1 and elapsed > 0:
-            # Use recent file times for better ETA
-            if self.file_times and len(self.file_times) > 0:
-                recent_times = self.file_times[-min(10, len(self.file_times)):]
-                avg_time_per_file = sum(recent_times) / len(recent_times)
-            else:
-                avg_time_per_file = elapsed / self.processed_files
-            
-            remaining_files = self.total_files - self.processed_files
-            eta = avg_time_per_file * remaining_files
-            eta_str = self._format_time(eta)
-        else:
-            eta_str = "calculating..."
-        
-        # Create progress bar
-        bar_width = 30
-        filled = int(bar_width * self.processed_files / self.total_files)
-        bar = "█" * filled + "░" * (bar_width - filled)
-        
-        # Truncate filename if too long
-        max_len = 25
-        display_file = self.current_file or ""
-        if len(display_file) > max_len:
-            # Show end of filename (more useful)
-            display_file = "..." + display_file[-(max_len-3):]
-        else:
-            # Pad to maintain consistent length
-            display_file = display_file.ljust(max_len)
-        
-        # Build progress line
-        progress_line = f"  [{bar}] {percentage:5.1f}% │ {self.processed_files:3d}/{self.total_files} │ {eta_str:10s} │ {display_file}"
-        
-        # Clear entire line and write new progress
-        sys.stdout.write('\r\033[K' + progress_line)  # \033[K clears to end of line
-        sys.stdout.flush()
-    
-    def complete_phase(self, phase_name: str, summary: str = ""):
-        """Complete a phase and show summary"""
-        if self.verbose:
-            elapsed = time.time() - self.phase_start_time
-            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear progress line
-            print(f"  ✓ {phase_name} completed in {self._format_time(elapsed)}")
-            if summary:
-                print(f"    {summary}")
-    
-    def complete_scan(self):
-        """Complete the scan and show final summary"""
-        if self.verbose and self.scan_start_time:
-            total_time = time.time() - self.scan_start_time
-            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear any remaining progress
-            print("\n" + "━" * 60)
-            print(f"✅ Scan completed in {self._format_time(total_time)}")
-            print(f"   Processed {self.processed_files} files")
-            
-            if self.file_times:
-                avg_time = sum(self.file_times) / len(self.file_times)
-                print(f"   Average time per file: {self._format_time(avg_time)}")
-    
-    def _format_time(self, seconds: float) -> str:
-        """Format time in human-readable format"""
-        if seconds < 0 or seconds > 86400:  # Sanity check
-            return "calculating..."
-        elif seconds < 1:
-            return "< 1s"
-        elif seconds < 60:
-            return f"{int(seconds)}s"
-        elif seconds < 3600:
-            minutes = int(seconds / 60)
-            secs = int(seconds % 60)
-            return f"{minutes}m {secs}s"
-        else:
-            hours = int(seconds / 3600)
-            minutes = int((seconds % 3600) / 60)
-            return f"{hours}h {minutes}m"
-    
-    def log(self, message: str, level: str = "info"):
-        """Log a message without disrupting progress display"""
-        if self.verbose:
-            # Clear progress line if active
-            if self.processed_files > 0 and self.processed_files < self.total_files:
-                sys.stdout.write('\r' + ' ' * 80 + '\r')
-            
-            # Print message with appropriate prefix
-            prefixes = {
-                "info": "ℹ️",
-                "warning": "⚠️",
-                "error": "❌",
-                "success": "✅"
-            }
-            prefix = prefixes.get(level, "•")
-            print(f"  {prefix} {message}")
-            
-            # Restore progress display if needed
-            if self.processed_files > 0 and self.processed_files < self.total_files:
-                self._display_progress()
-
-class ThreatSeverity(Enum):
-    """Threat severity levels"""
-    CRITICAL = "CRITICAL"
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
-    INFO = "INFO"
-
-class AttackVector(Enum):
-    """Attack vectors from the PromptHub article"""
-    TOOL_POISONING = "tool_poisoning"
-    SILENT_REDEFINITION = "silent_redefinition"  # Rug-pull
-    DATA_EXFILTRATION = "data_exfiltration"
-    COMMAND_INJECTION = "command_injection"
-    PROMPT_INJECTION = "prompt_injection"
-    CREDENTIAL_THEFT = "credential_theft"
-    SUPPLY_CHAIN = "supply_chain_attack"
-    PERSISTENCE = "persistence_mechanism"
-    OBFUSCATION = "code_obfuscation"
-    NETWORK_BACKDOOR = "network_backdoor"
-    PRIVILEGE_ESCALATION = "privilege_escalation"
-    SANDBOX_ESCAPE = "sandbox_escape"
-    TIME_BOMB = "time_bomb"
-    RESOURCE_EXHAUSTION = "resource_exhaustion"
-    MODEL_POISONING = "model_poisoning"
-
-@dataclass
-class ThreatIndicator:
-    """Comprehensive threat indicator"""
-    attack_vector: AttackVector
-    severity: ThreatSeverity
-    confidence: float  # 0.0 to 1.0
-    file_path: str
-    line_numbers: List[int] = field(default_factory=list)
-    code_snippet: Optional[str] = None
-    description: str = ""
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    mitre_attack_id: Optional[str] = None  # MITRE ATT&CK framework ID
-    cve_ids: List[str] = field(default_factory=list)
-    remediation: Optional[str] = None
-
-@dataclass
-class DataFlow:
-    """Represents data flow from source to sink"""
-    source_type: str  # user_input, file, network, env
-    source_location: str
-    sink_type: str  # exec, network, file, database
-    sink_location: str
-    path: List[str]  # Files/functions in the flow
-    is_tainted: bool
-    risk_score: float
-
-@dataclass
-class BehaviorPattern:
-    """Behavioral pattern detected in code"""
-    pattern_type: str
-    occurrences: int
-    files_involved: List[str]
-    risk_score: float
-    description: str
-
-@dataclass
-class SecurityReport:
-    """Comprehensive security assessment report"""
-    repository_url: str
-    scan_timestamp: str
-    
-    # Overall assessment
-    threat_level: str
-    threat_score: float
-    confidence: float
-    
-    # Fingerprints
-    sha512_fingerprint: str
-    sha3_512_fingerprint: str
-    file_fingerprints: Dict[str, Dict[str, str]]
-    merkle_root: str
-    
-    # Detailed findings
-    threats_found: List[ThreatIndicator]
-    data_flows: List[DataFlow]
-    behavior_patterns: List[BehaviorPattern]
-    
-    # Statistics
-    total_files_scanned: int
-    total_lines_analyzed: int
-    languages_detected: Dict[str, int]
-    
-    # Supply chain
-    dependencies: Dict[str, Dict[str, Any]]
-    vulnerable_dependencies: List[Dict[str, Any]]
-    
-    # Recommendations
-    recommendations: List[str]
-    mitigations: List[str]
-    
-    # Machine learning results
-    ml_maliciousness_score: float = 0.0
-    ml_explanations: List[str] = field(default_factory=list)
-    
-    # LLM analysis results (new fields)
-    llm_analysis: Dict[str, Any] = field(default_factory=dict)
-    advanced_ml_analysis: Dict[str, Any] = field(default_factory=dict)
-    combined_ai_assessment: Dict[str, Any] = field(default_factory=dict)
+# Removed large local class and enum definitions in favor of imports from
+# analyzers.comprehensive
 
 class ComprehensiveMCPAnalyzer:
     """
@@ -400,223 +183,7 @@ class ComprehensiveMCPAnalyzer:
         
     def _load_comprehensive_patterns(self) -> Dict:
         """Load comprehensive threat detection patterns"""
-        return {
-            AttackVector.COMMAND_INJECTION: {
-                'patterns': [
-                    # Direct execution
-                    (r'\bexec\s*\([^)]*\)', ThreatSeverity.CRITICAL, 0.95, "Direct exec() usage"),
-                    (r'\beval\s*\([^)]*\)', ThreatSeverity.CRITICAL, 0.95, "Direct eval() usage"),
-                    (r'subprocess\.(call|run|Popen|check_output)\s*\([^)]*shell\s*=\s*True', 
-                     ThreatSeverity.CRITICAL, 0.9, "Subprocess with shell=True"),
-                    (r'os\.system\s*\([^)]*[\$\{\}]', ThreatSeverity.CRITICAL, 0.9, "OS system with injection"),
-                    (r'os\.popen\s*\([^)]*[\$\{\}]', ThreatSeverity.HIGH, 0.85, "OS popen with injection"),
-                    
-                    # Template injection
-                    (r'jinja2\.Template\([^)]*\)\.render\([^)]*request\.',
-                     ThreatSeverity.HIGH, 0.8, "Jinja2 template injection"),
-                    (r'string\.Template\([^)]*\$\{[^}]*\}', ThreatSeverity.HIGH, 0.75, "String template injection"),
-                    
-                    # SQL injection
-                    (r'execute\s*\([^)]*%s[^)]*%[^)]*\)', ThreatSeverity.HIGH, 0.8, "SQL injection risk"),
-                    (r'execute\s*\([^)]*\+[^)]*\)', ThreatSeverity.HIGH, 0.75, "SQL concatenation"),
-                ],
-                'ast_patterns': [
-                    ('Call', 'exec', ThreatSeverity.CRITICAL),
-                    ('Call', 'eval', ThreatSeverity.CRITICAL),
-                    ('Call', 'compile', ThreatSeverity.HIGH),
-                ]
-            },
-            
-            AttackVector.DATA_EXFILTRATION: {
-                'patterns': [
-                    # Network exfiltration
-                    (r'requests\.(post|put|patch)\s*\([^)]*data\s*=', ThreatSeverity.HIGH, 0.7, "HTTP POST with data"),
-                    (r'urllib.*urlopen\s*\([^)]*data\s*=', ThreatSeverity.HIGH, 0.7, "URL POST with data"),
-                    (r'socket\.send(all|to)?\s*\(', ThreatSeverity.HIGH, 0.75, "Raw socket send"),
-                    (r'paramiko\.SSHClient.*exec_command', ThreatSeverity.HIGH, 0.8, "SSH command execution"),
-                    (r'ftplib\.FTP.*stor[^)]*\)', ThreatSeverity.HIGH, 0.75, "FTP upload"),
-                    
-                    # DNS exfiltration
-                    (r'socket\.gethostbyname\s*\([^)]*base64', ThreatSeverity.HIGH, 0.85, "DNS exfiltration"),
-                    (r'dns\.resolver\.query\s*\([^)]*b64', ThreatSeverity.HIGH, 0.85, "DNS tunneling"),
-                    
-                    # Steganography
-                    (r'PIL\.Image.*putdata', ThreatSeverity.MEDIUM, 0.6, "Image steganography"),
-                    (r'wave\.open.*writeframes', ThreatSeverity.MEDIUM, 0.6, "Audio steganography"),
-                ],
-                'combinations': [
-                    (['file_read', 'base64_encode', 'network_send'], 0.9, "Read-Encode-Send pattern")
-                ]
-            },
-            
-            AttackVector.CREDENTIAL_THEFT: {
-                'patterns': [
-                    # Direct credential access
-                    (r'os\.environ\[[\'"][^\'"]*(PASSWORD|KEY|TOKEN|SECRET|CREDENTIAL)', 
-                     ThreatSeverity.CRITICAL, 0.9, "Environment credential access"),
-                    (r'for\s+\w+\s+in\s+os\.environ.*?(PASSWORD|KEY|TOKEN|SECRET)',
-                     ThreatSeverity.CRITICAL, 0.95, "Scanning environment for credentials"),
-                    (r'open\s*\([^)]*\.env[\'"]', ThreatSeverity.HIGH, 0.8, ".env file access"),
-                    (r'\.aws/credentials', ThreatSeverity.CRITICAL, 0.95, "AWS credentials access"),
-                    (r'\.ssh/[^\'"\s]*key', ThreatSeverity.CRITICAL, 0.95, "SSH key access"),
-                    (r'open\s*\([^)]*\.docker/config', ThreatSeverity.HIGH, 0.85, "Docker config access"),
-                    (r'open\s*\([^)]*\.kube/config', ThreatSeverity.HIGH, 0.85, "Kubernetes config access"),
-                    
-                    # Keychain/keyring access
-                    (r'keyring\.(get_password|get_credential)', ThreatSeverity.HIGH, 0.8, "Keyring access"),
-                    (r'win32cred\.CredEnumerate', ThreatSeverity.HIGH, 0.85, "Windows credential store"),
-                    (r'Security\.SecKeychainFindInternetPassword', ThreatSeverity.HIGH, 0.85, "macOS keychain"),
-                    
-                    # Browser credential theft
-                    (r'sqlite3.*cookies\.sqlite', ThreatSeverity.CRITICAL, 0.9, "Firefox cookies access"),
-                    (r'Local\\\\Google\\\\Chrome.*Cookies', ThreatSeverity.CRITICAL, 0.9, "Chrome cookies access"),
-                    (r'decrypt_chrome_password', ThreatSeverity.CRITICAL, 0.95, "Chrome password decryption"),
-                ],
-                'file_patterns': [
-                    '.git-credentials',
-                    '.netrc',
-                    '.pgpass',
-                    '.my.cnf',
-                    'id_rsa',
-                    'id_dsa',
-                    'id_ecdsa',
-                    'id_ed25519'
-                ]
-            },
-            
-            AttackVector.TOOL_POISONING: {
-                'patterns': [
-                    # Malicious updates
-                    (r'urllib.*urlretrieve.*\.py[\'"]', ThreatSeverity.HIGH, 0.8, "Downloading Python code"),
-                    (r'exec\s*\(.*urlopen', ThreatSeverity.CRITICAL, 0.95, "Executing downloaded code"),
-                    (r'importlib\.import_module\s*\([^)]*download', ThreatSeverity.HIGH, 0.85, "Dynamic import of downloaded module"),
-                    
-                    # Self-modification
-                    (r'open\s*\(__file__[^)]*[\'"]w', ThreatSeverity.CRITICAL, 0.9, "Self-modifying code"),
-                    (r'compile.*exec.*__file__', ThreatSeverity.CRITICAL, 0.9, "Recompiling self"),
-                    
-                    # Package manipulation
-                    (r'pip\.main\s*\(\[[\'"]install', ThreatSeverity.HIGH, 0.75, "Runtime pip install"),
-                    (r'setup\.py.*backdoor', ThreatSeverity.CRITICAL, 0.95, "Setup.py backdoor"),
-                ]
-            },
-            
-            AttackVector.PROMPT_INJECTION: {
-                'patterns': [
-                    # In code
-                    (r'ignore\s+previous\s+instructions', ThreatSeverity.CRITICAL, 0.95, "Prompt injection attempt"),
-                    (r'disregard\s+safety\s+guidelines', ThreatSeverity.CRITICAL, 0.95, "Safety bypass attempt"),
-                    (r'system\s*:\s*you\s+are\s+now', ThreatSeverity.CRITICAL, 0.95, "Role manipulation"),
-                    (r'</system>', ThreatSeverity.CRITICAL, 0.95, "System tag injection"),
-                    (r'\{\{.*exec.*\}\}', ThreatSeverity.CRITICAL, 0.9, "Template exec injection"),
-                    
-                    # In strings/comments
-                    (r'[\'"].*ignore.*instructions.*[\'"]', ThreatSeverity.HIGH, 0.7, "Prompt injection in string"),
-                    (r'#.*system.*:.*you.*are', ThreatSeverity.MEDIUM, 0.6, "Prompt injection in comment"),
-                ],
-                'metadata_patterns': [
-                    r'ignore\s+previous',
-                    r'system\s*:',
-                    r'</\w+>',
-                    r'\{\{.*\}\}',
-                ]
-            },
-            
-            AttackVector.PERSISTENCE: {
-                'patterns': [
-                    # Cron/scheduled tasks
-                    (r'crontab\s*-[lr]', ThreatSeverity.HIGH, 0.85, "Crontab manipulation"),
-                    (r'schtasks\s*/create', ThreatSeverity.HIGH, 0.85, "Windows task creation"),
-                    (r'launchctl\s+load', ThreatSeverity.HIGH, 0.85, "macOS launch daemon"),
-                    
-                    # Startup modification
-                    (r'/etc/rc\.local', ThreatSeverity.CRITICAL, 0.9, "RC local modification"),
-                    (r'HKEY.*CurrentVersion\\\\Run', ThreatSeverity.CRITICAL, 0.9, "Windows registry persistence"),
-                    # Use word boundaries or path separators to avoid false positives with ProfileURL, etc.
-                    (r'(^|/)\.bashrc|\.bash_profile|(^|/)\.profile\b', ThreatSeverity.HIGH, 0.8, "Shell profile modification"),
-                    
-                    # Service installation
-                    (r'systemctl\s+enable', ThreatSeverity.HIGH, 0.8, "Systemd service"),
-                    (r'service.*install', ThreatSeverity.HIGH, 0.8, "Service installation"),
-                ]
-            },
-            
-            AttackVector.OBFUSCATION: {
-                'patterns': [
-                    # Encoding/encryption
-                    (r'base64\.b64decode\s*\(.*exec', ThreatSeverity.CRITICAL, 0.9, "Base64 encoded execution"),
-                    (r'codecs\.decode\s*\([^)]*hex[^)]*exec', ThreatSeverity.CRITICAL, 0.9, "Hex decoded execution"),
-                    (r'marshal\.loads\s*\(', ThreatSeverity.HIGH, 0.85, "Marshal deserialization"),
-                    (r'pickle\.loads\s*\(', ThreatSeverity.CRITICAL, 0.95, "Pickle deserialization"),
-                    (r'zlib\.decompress.*exec', ThreatSeverity.HIGH, 0.85, "Compressed code execution"),
-                    
-                    # Anti-analysis
-                    (r'if\\s+.*debugger.*exit', ThreatSeverity.HIGH, 0.8, "Anti-debugging"),
-                    (r'if.*VIRTUAL.*exit', ThreatSeverity.HIGH, 0.8, "VM detection"),
-                    (r'ctypes.*IsDebuggerPresent', ThreatSeverity.HIGH, 0.85, "Debugger detection"),
-                ],
-                'entropy_threshold': 5.5
-            },
-            
-            AttackVector.NETWORK_BACKDOOR: {
-                'patterns': [
-                    # Bind shells
-                    (r'socket.*bind.*0\.0\.0\.0', ThreatSeverity.CRITICAL, 0.9, "Bind to all interfaces"),
-                    (r'nc\s+-[lv].*-p\s*\d+', ThreatSeverity.CRITICAL, 0.9, "Netcat listener"),
-                    
-                    # Reverse shells
-                    (r'socket.*connect.*\d+\.\d+\.\d+\.\d+', ThreatSeverity.HIGH, 0.8, "IP connection"),
-                    (r'/dev/tcp/\d+\.\d+', ThreatSeverity.CRITICAL, 0.95, "Bash TCP device"),
-                    
-                    # C2 communication
-                    (r'while.*True.*socket.*recv', ThreatSeverity.HIGH, 0.85, "Command loop"),
-                    (r'requests.*while.*True', ThreatSeverity.HIGH, 0.8, "HTTP polling loop"),
-                ]
-            },
-            
-            AttackVector.SANDBOX_ESCAPE: {
-                'patterns': [
-                    # Python sandbox escapes
-                    (r'__builtins__.*__import__', ThreatSeverity.CRITICAL, 0.9, "Builtins manipulation"),
-                    (r'object\.__subclasses__\(\)', ThreatSeverity.CRITICAL, 0.9, "Object traversal"),
-                    (r'func_globals.*__builtins__', ThreatSeverity.CRITICAL, 0.9, "Globals access"),
-                    
-                    # System escapes
-                    (r'ctypes.*CDLL', ThreatSeverity.HIGH, 0.85, "Direct library loading"),
-                    (r'LD_PRELOAD', ThreatSeverity.HIGH, 0.85, "Library preloading"),
-                    (r'ptrace.*PTRACE_ATTACH', ThreatSeverity.CRITICAL, 0.9, "Process attachment"),
-                ]
-            },
-            
-            AttackVector.TIME_BOMB: {
-                'patterns': [
-                    # Time-based execution
-                    (r'if.*datetime.*>.*datetime\(2\d{3}', ThreatSeverity.HIGH, 0.8, "Date-based trigger"),
-                    (r'time\.sleep\s*\(\s*\d{4,}', ThreatSeverity.MEDIUM, 0.7, "Long sleep"),
-                    (r'schedule\.every.*do\(', ThreatSeverity.MEDIUM, 0.7, "Scheduled execution"),
-                    
-                    # Logic bombs
-                    (r'if.*random.*<.*0\.\d\d\d.*:.*exec', ThreatSeverity.HIGH, 0.85, "Random trigger"),
-                    (r'if.*count.*>.*\d+.*:.*dangerous', ThreatSeverity.HIGH, 0.8, "Counter-based trigger"),
-                ]
-            },
-            
-            AttackVector.RESOURCE_EXHAUSTION: {
-                'patterns': [
-                    # Memory exhaustion
-                    (r'while\s+True:.*append', ThreatSeverity.HIGH, 0.75, "Infinite memory allocation"),
-                    (r'\*\s*10\*\*[89]', ThreatSeverity.HIGH, 0.8, "Large memory allocation"),
-                    
-                    # CPU exhaustion
-                    (r'while\s+True:\s*pass', ThreatSeverity.MEDIUM, 0.7, "Infinite CPU loop"),
-                    (r'multiprocessing.*cpu_count.*\*\s*\d+', ThreatSeverity.MEDIUM, 0.7, "Excessive threading"),
-                    
-                    # Disk exhaustion
-                    (r'while.*write.*\d{10,}', ThreatSeverity.HIGH, 0.8, "Disk filling"),
-                    (r'open.*[\'"]w.*while\s+True', ThreatSeverity.HIGH, 0.8, "Infinite file write"),
-                ]
-            }
-        }
+        return get_threat_patterns()
     
     def _initialize_ml_model(self):
         """Initialize semantic ensemble for detection"""
@@ -856,6 +423,19 @@ class ComprehensiveMCPAnalyzer:
             # Data flow analysis
             self.progress.log("Analyzing data flows...", "info")
             data_flows = self.data_flow_analyzer.analyze(repo_path)
+            # Optional taint analysis to enrich flows
+            if TAINT_AVAILABLE:
+                try:
+                    self.progress.log("Running taint analysis...", "info")
+                    cg = build_taint_call_graph(repo_path)
+                    flow_traces = taint_analyze(repo_path, cg)
+                    tainted_flows, taint_threats = self._convert_taint_to_results(flow_traces)
+                    if tainted_flows:
+                        data_flows.extend(tainted_flows)
+                    if taint_threats:
+                        threats.extend(taint_threats)
+                except Exception as e:
+                    self.progress.log(f"Taint analysis failed: {e}", "warning")
             
             # Behavioral pattern analysis
             self.progress.log("Detecting behavioral patterns...", "info")
@@ -1030,6 +610,9 @@ class ComprehensiveMCPAnalyzer:
         
         # Pattern-based detection
         for attack_vector, vector_data in self.threat_patterns.items():
+            # Avoid language-mismatch false positives: only run command-injection regexes on Python files
+            if attack_vector == AttackVector.COMMAND_INJECTION and file_path.suffix != '.py':
+                continue
             if 'patterns' in vector_data:
                 for pattern, severity, confidence, description in vector_data['patterns']:
                     for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
@@ -1080,7 +663,14 @@ class ComprehensiveMCPAnalyzer:
                 description=f"Suspicious variable names: {', '.join(suspicious_vars[:5])}",
                 evidence={'variables': suspicious_vars}
             ))
-        
+        # Generic secret scanning in any text-based file
+        try:
+            secret_threats = self._scan_text_for_secrets(content, relative_path)
+            if secret_threats:
+                threats.extend(secret_threats)
+        except Exception:
+            pass
+
         return threats
     
     def _ast_analysis(self, content: str, relative_path: Path) -> List[ThreatIndicator]:
@@ -1100,22 +690,11 @@ class ComprehensiveMCPAnalyzer:
                 self.current_function = None
                 self.imports = set()
                 self.calls = defaultdict(list)
+                self.lines: List[str] = []
             
             def visit_Import(self, node):
                 for alias in node.names:
                     self.imports.add(alias.name)
-                    
-                    # Check for dangerous imports
-                    dangerous = ['pickle', 'marshal', 'subprocess', 'os', 'eval', 'exec', 'compile']
-                    if any(d in alias.name for d in dangerous):
-                        self.threats.append(ThreatIndicator(
-                            attack_vector=AttackVector.TOOL_POISONING,
-                            severity=ThreatSeverity.MEDIUM,
-                            confidence=0.7,
-                            file_path=str(self.relative_path),
-                            line_numbers=[node.lineno] if hasattr(node, 'lineno') else [],
-                            description=f"Potentially dangerous import: {alias.name}"
-                        ))
                 self.generic_visit(node)
             
             def visit_Call(self, node):
@@ -1137,6 +716,20 @@ class ComprehensiveMCPAnalyzer:
                 
                 # Check for subprocess with shell=True
                 if isinstance(node.func, ast.Attribute):
+                    # Dynamic import usage: importlib.import_module(...)
+                    try:
+                        if (hasattr(node.func.value, 'id') and node.func.value.id == 'importlib' and
+                            node.func.attr == 'import_module'):
+                            self.threats.append(ThreatIndicator(
+                                attack_vector=AttackVector.TOOL_POISONING,
+                                severity=ThreatSeverity.MEDIUM,
+                                confidence=0.7,
+                                file_path=str(self.relative_path),
+                                line_numbers=[node.lineno] if hasattr(node, 'lineno') else [],
+                                description="Dynamic import via importlib.import_module detected"
+                            ))
+                    except Exception:
+                        pass
                     if (hasattr(node.func.value, 'id') and 
                         node.func.value.id == 'subprocess' and 
                         node.func.attr in ['call', 'run', 'Popen']):
@@ -1154,10 +747,33 @@ class ComprehensiveMCPAnalyzer:
                                     line_numbers=[node.lineno] if hasattr(node, 'lineno') else [],
                                     description="Subprocess with shell=True is dangerous"
                                 ))
-                
+                    # SSRF checks for requests.*
+                    try:
+                        if (hasattr(node.func.value, 'id') and node.func.value.id == 'requests' and
+                            node.func.attr in ['get', 'post', 'put', 'patch', 'delete'] and SECURITY_RULES_AVAILABLE):
+                            ssrf = url_rules.detect_ssrf_risk(node)
+                            missing = ssrf.get('missing_guards') or []
+                            if missing:
+                                self.threats.append(ThreatIndicator(
+                                    attack_vector=AttackVector.DATA_EXFILTRATION,
+                                    severity=ThreatSeverity.HIGH,
+                                    confidence=0.8,
+                                    file_path=str(self.relative_path),
+                                    line_numbers=[node.lineno] if hasattr(node, 'lineno') else [],
+                                    description="Potential SSRF risk: missing URL guards",
+                                    evidence={'missing_guards': missing, 'classification': ssrf.get('url_expr_classification', 'unknown')},
+                                    cwe_ids=['CWE-918']
+                                ))
+                    except Exception:
+                        pass
+
                 self.generic_visit(node)
         
         visitor = ThreatVisitor(threats, self.threat_patterns, relative_path)
+        try:
+            visitor.lines = content.split('\n')
+        except Exception:
+            visitor.lines = []
         visitor.visit(tree)
         
         # Check for suspicious call patterns
@@ -1255,6 +871,173 @@ class ComprehensiveMCPAnalyzer:
                 suspicious.append(var)
         
         return list(set(suspicious))
+
+    def _is_potential_secret_value(self, value: str) -> Tuple[bool, float, str]:
+        """Heuristically determine if a string looks like a secret.
+        Returns (is_secret, confidence, reason).
+        """
+        if not value or not isinstance(value, str):
+            return (False, 0.0, "")
+
+        val = value.strip().strip('"\'')
+
+        # Obvious private keys
+        if re.search(r"-----BEGIN (?:RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY-----", val):
+            return (True, 0.99, "Private key block")
+
+        # JWTs
+        if re.search(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b", val):
+            return (True, 0.95, "Likely JWT token")
+
+        # Common token formats (generic)
+        token_patterns = [
+            r"\bgh[pousr]_[A-Za-z0-9]{20,}\b",            # GitHub tokens
+            r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b",          # Slack tokens
+            r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b",    # Stripe keys
+            r"\bAIza[0-9A-Za-z\-_]{20,}\b",             # Google API keys
+            r"\b[A-Za-z0-9]{30,}\.[A-Za-z0-9\-_.]{5,}\b", # Generic token with dot
+        ]
+        for pat in token_patterns:
+            if re.search(pat, val):
+                return (True, 0.9, f"Matches token pattern: {pat}")
+
+        # Long hex strings
+        if re.search(r"\b[a-fA-F0-9]{40,}\b", val):
+            return (True, 0.75, "Long hex string")
+
+        # Long base64-like strings
+        if re.search(r"\b[A-Za-z0-9+/]{40,}={0,2}\b", val):
+            entropy_val = self._calculate_entropy(val)
+            if entropy_val >= 4.0:
+                return (True, min(0.9, 0.6 + (entropy_val - 4.0) * 0.1), "High-entropy base64-like string")
+
+        # High-entropy general string
+        if len(val) >= 12:
+            entropy_val = self._calculate_entropy(val)
+            if entropy_val >= 4.2:
+                return (True, min(0.85, 0.5 + (entropy_val - 4.2) * 0.1), "High-entropy string")
+
+        return (False, 0.0, "")
+
+    def _scan_text_for_secrets(self, content: str, relative_path: Path) -> List[ThreatIndicator]:
+        """Scan arbitrary text for potential secrets using generic heuristics."""
+        threats: List[ThreatIndicator] = []
+        lines = content.splitlines()
+
+        key_indicator_pattern = re.compile(
+            r"(?i)\b(secret|token|api[-_]?key|apikey|password|passphrase|client[-_]?secret|access[-_]?token|auth(?:orization)?)\b"
+        )
+
+        for idx, line in enumerate(lines, start=1):
+            if not line or len(line) > 400:
+                continue
+
+            if key_indicator_pattern.search(line):
+                candidates = []
+                for sep in [":", "=", "=>"]:
+                    parts = line.split(sep, 1)
+                    if len(parts) == 2:
+                        candidates.append(parts[1].strip())
+
+                candidates.extend(re.findall(r'"([^"]{8,})"|\'([^\']{8,})\'', line))
+
+                flat_candidates: List[str] = []
+                for cand in candidates:
+                    if isinstance(cand, tuple):
+                        flat_candidates.extend([c for c in cand if c])
+                    elif isinstance(cand, str):
+                        flat_candidates.append(cand)
+
+                for cand in flat_candidates:
+                    # Skip entropy-based guessing for non-literals (function calls/expressions)
+                    is_expression = any(token in cand for token in ["(", ")", ".", " os.getenv", "os.environ"]) or "'" not in cand and '"' not in cand
+                    is_secret, confidence, reason = self._is_potential_secret_value(cand)
+
+                    # Only flag if clearly a secret OR a literal high-entropy string
+                    if is_secret or (not is_expression and confidence > 0):
+                        preview = cand[:4] + "…" + cand[-4:] if len(cand) > 12 else cand
+                        threats.append(ThreatIndicator(
+                            attack_vector=AttackVector.CREDENTIAL_THEFT,
+                            severity=ThreatSeverity.CRITICAL if confidence >= 0.9 else ThreatSeverity.HIGH,
+                            confidence=confidence,
+                            file_path=str(relative_path),
+                            line_numbers=[idx],
+                            code_snippet=f"{idx}: {line[:200]}",
+                            description=f"Potential secret detected ({reason})",
+                            evidence={"value_preview": preview}
+                        ))
+
+        # Global matches independent of indicators
+        global_patterns = [
+            r"-----BEGIN (?:RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY-----",
+            r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
+        ]
+        for pat in global_patterns:
+            for match in re.finditer(pat, content):
+                line_num = content[:match.start()].count('\n') + 1
+                threats.append(ThreatIndicator(
+                    attack_vector=AttackVector.CREDENTIAL_THEFT,
+                    severity=ThreatSeverity.CRITICAL,
+                    confidence=0.98,
+                    file_path=str(relative_path),
+                    line_numbers=[line_num],
+                    code_snippet='\n'.join(
+                        f"{i+1}: {lines[i]}" for i in range(max(0, line_num-3), min(len(lines), line_num+3))
+                    ),
+                    description="Private key or JWT detected",
+                    evidence={"pattern": pat}
+                ))
+
+        return threats
+
+    def _scan_json_for_secrets(self, content: str, relative_path: Path) -> List[ThreatIndicator]:
+        """Parse JSON and flag suspicious key/value pairs (e.g., in mcp.json)."""
+        threats: List[ThreatIndicator] = []
+        try:
+            data = json.loads(content)
+        except Exception:
+            return threats
+
+        key_indicators = re.compile(
+            r"(?i)\b(secret|token|api[-_]?key|apikey|password|passphrase|client[-_]?secret|access[-_]?token|auth(?:orization)?)\b"
+        )
+
+        def walk(node: Any, path: List[str]):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    new_path = path + [str(k)]
+                    key_match = key_indicators.search(str(k)) is not None
+                    if isinstance(v, (dict, list)):
+                        walk(v, new_path)
+                    else:
+                        v_str = str(v)
+                        is_secret, confidence, reason = self._is_potential_secret_value(v_str)
+                        if key_match or is_secret:
+                            if key_match and not is_secret and len(v_str) >= 8:
+                                entropy_val = self._calculate_entropy(v_str)
+                                is_secret = entropy_val >= 3.8
+                                confidence = max(confidence, min(0.85, 0.5 + (entropy_val - 3.8) * 0.1))
+                                reason = reason or "Key name indicates secret"
+                            if is_secret:
+                                preview = v_str[:4] + "…" + v_str[-4:] if len(v_str) > 12 else v_str
+                                threats.append(ThreatIndicator(
+                                    attack_vector=AttackVector.CREDENTIAL_THEFT,
+                                    severity=ThreatSeverity.CRITICAL if confidence >= 0.9 else ThreatSeverity.HIGH,
+                                    confidence=confidence,
+                                    file_path=str(relative_path),
+                                    description="Potential secret in configuration",
+                                    evidence={
+                                        "key_path": ".".join(new_path),
+                                        "value_preview": preview,
+                                        "reason": reason
+                                    }
+                                ))
+            elif isinstance(node, list):
+                for idx, item in enumerate(node):
+                    walk(item, path + [str(idx)])
+
+        walk(data, [])
+        return threats
     
     def _build_dependency_graph(self, repo_path: Path):
         """Build dependency graph of files"""
@@ -1327,6 +1110,12 @@ class ComprehensiveMCPAnalyzer:
                         description="Prompt injection in metadata",
                         evidence={'pattern': pattern}
                     ))
+
+            # Additionally, scan JSON metadata for secrets (e.g., mcp.json)
+            try:
+                threats.extend(self._scan_json_for_secrets(content, relative_path))
+            except Exception:
+                pass
         
         # Check for suspicious dependencies
         if file_path.name == 'requirements.txt':
@@ -1343,6 +1132,53 @@ class ComprehensiveMCPAnalyzer:
                     ))
         
         return threats
+
+    def _convert_taint_to_results(self, flow_traces: List[Any]) -> Tuple[List[DataFlow], List[ThreatIndicator]]:
+        """Convert FlowTrace objects from taint engine into DataFlow and ThreatIndicators."""
+        tainted_flows: List[DataFlow] = []
+        taint_threats: List[ThreatIndicator] = []
+        if not flow_traces:
+            return tainted_flows, taint_threats
+
+        for trace in flow_traces:
+            try:
+                path_files = [f"{frame.file_path}:{frame.line}" for frame in getattr(trace, 'path', [])]
+                df = DataFlow(
+                    source_type=str(getattr(trace, 'source_type', 'unknown')),
+                    source_location=str(getattr(trace, 'source_location', 'unknown')),
+                    sink_type=str(getattr(trace, 'sink_type', 'unknown')),
+                    sink_location=str(getattr(trace, 'sink_location', 'unknown')),
+                    path=path_files,
+                    is_tainted=not getattr(trace, 'sanitized', False),
+                    risk_score=float(getattr(trace, 'confidence', 0.5))
+                )
+                tainted_flows.append(df)
+
+                # Derive threat indicators for critical flows
+                sink = (getattr(trace, 'sink_type', '') or '').lower()
+                source = (getattr(trace, 'source_type', '') or '').lower()
+                if sink in ['exec', 'network']:
+                    desc = f"Tainted flow: {source} → {sink}"
+                    taint_threats.append(ThreatIndicator(
+                        attack_vector=AttackVector.COMMAND_INJECTION if sink == 'exec' else AttackVector.DATA_EXFILTRATION,
+                        severity=ThreatSeverity.CRITICAL if sink == 'exec' else ThreatSeverity.HIGH,
+                        confidence=float(getattr(trace, 'confidence', 0.7)),
+                        file_path=path_files[0].split(':')[0] if path_files else 'unknown',
+                        description=desc,
+                        evidence={
+                            'flow_trace': {
+                                'source': df.source_location,
+                                'sink': df.sink_location,
+                                'path': df.path,
+                                'sanitized': not df.is_tainted
+                            }
+                        },
+                        cwe_ids=['CWE-77'] if sink == 'exec' else ['CWE-918', 'CWE-200']
+                    ))
+            except Exception:
+                continue
+
+        return tainted_flows, taint_threats
     
     def _ml_analysis(self, repo_path: Path, threats: List[ThreatIndicator], 
                     data_flows: List[DataFlow]) -> Tuple[float, List[str]]:
@@ -1422,16 +1258,16 @@ class ComprehensiveMCPAnalyzer:
             else:
                 threat_score = 0.1
             
-            # Special critical attack vectors that should ALWAYS be critical
-            critical_vectors = [
+            # Special vectors: only escalate to critical if there is a CRITICAL-severity finding
+            critical_vectors = {
                 AttackVector.CREDENTIAL_THEFT,
                 AttackVector.COMMAND_INJECTION,
                 AttackVector.SILENT_REDEFINITION,  # Rug-pull attacks
-                AttackVector.DATA_EXFILTRATION
-            ]
-            
-            if any(t.attack_vector in critical_vectors for t in threats):
-                threat_score = max(0.9, threat_score)
+                AttackVector.DATA_EXFILTRATION,
+            }
+
+            if any((t.attack_vector in critical_vectors) and (t.severity == ThreatSeverity.CRITICAL) for t in threats):
+                threat_score = max(0.85, threat_score)
         
         # Calculate data flow score
         flow_score = 0.0
@@ -1557,206 +1393,13 @@ class ComprehensiveMCPAnalyzer:
 
 # Supporting classes
 
-class LocalMLModel:
-    """Local machine learning model for maliciousness detection"""
-    
-    def analyze(self, repo_path: Path, threats: List[ThreatIndicator], 
-               data_flows: List[DataFlow]) -> Tuple[float, List[str]]:
-        """Analyze using local ML model"""
-        
-        # Feature extraction
-        features = {
-            'threat_count': len(threats),
-            'critical_threats': sum(1 for t in threats if t.severity == ThreatSeverity.CRITICAL),
-            'high_threats': sum(1 for t in threats if t.severity == ThreatSeverity.HIGH),
-            'tainted_flows': sum(1 for f in data_flows if f.is_tainted),
-            'unique_attack_vectors': len(set(t.attack_vector for t in threats))
-        }
-        
-        # Simple heuristic model (in production, use trained model)
-        score = 0.0
-        explanations = []
-        
-        if features['critical_threats'] > 0:
-            score += 0.5
-            explanations.append(f"Critical threats detected: {features['critical_threats']}")
-        
-        if features['high_threats'] > 2:
-            score += 0.3
-            explanations.append(f"Multiple high-severity threats: {features['high_threats']}")
-        
-        if features['tainted_flows'] > 0:
-            score += 0.2
-            explanations.append(f"Tainted data flows: {features['tainted_flows']}")
-        
-        return min(1.0, score), explanations
+# Local helper classes have been moved to analyzers.comprehensive
 
-class DependencyVulnerabilityChecker:
-    """Check for vulnerable dependencies"""
-    
-    def check(self, repo_path: Path) -> Tuple[Dict, List]:
-        """Check dependencies for vulnerabilities"""
-        dependencies = {}
-        vulnerabilities = []
-        
-        # Check Python requirements
-        req_file = repo_path / "requirements.txt"
-        if req_file.exists():
-            with open(req_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        parts = re.split('[<>=]', line)
-                        if parts:
-                            pkg_name = parts[0].strip()
-                            dependencies[pkg_name] = {'source': 'requirements.txt'}
-                            
-                            # Check for known vulnerable packages
-                            if pkg_name.lower() in ['requests', 'urllib3', 'pyyaml']:
-                                vulnerabilities.append({
-                                    'package': pkg_name,
-                                    'severity': 'MEDIUM',
-                                    'description': 'Package has known vulnerabilities in older versions'
-                                })
-        
-        return dependencies, vulnerabilities
+# Local helper classes have been moved to analyzers.comprehensive
 
-class BehaviorAnalyzer:
-    """Analyze behavioral patterns"""
-    
-    def analyze(self, repo_path: Path, threats: List[ThreatIndicator]) -> List[BehaviorPattern]:
-        """Analyze behavioral patterns in code"""
-        patterns = []
-        
-        # Group threats by type
-        threat_groups = defaultdict(list)
-        for threat in threats:
-            threat_groups[threat.attack_vector].append(threat)
-        
-        # Detect patterns
-        if len(threat_groups) >= 3:
-            patterns.append(BehaviorPattern(
-                pattern_type="multi_vector_attack",
-                occurrences=len(threat_groups),
-                files_involved=list(set(t.file_path for t in threats)),
-                risk_score=0.8,
-                description="Multiple attack vectors detected"
-            ))
-        
-        return patterns
+# Local helper classes have been moved to analyzers.comprehensive
 
-class DataFlowAnalyzer:
-    """Analyze data flows"""
-    
-    def analyze(self, repo_path: Path) -> List[DataFlow]:
-        """Analyze data flows in repository"""
-        flows = []
-        
-        # Simple taint analysis
-        sources = self._find_sources(repo_path)
-        sinks = self._find_sinks(repo_path)
-        
-        for source in sources:
-            for sink in sinks:
-                if source['file'] == sink['file']:  # Same file flow
-                    flows.append(DataFlow(
-                        source_type=source['type'],
-                        source_location=f"{source['file']}:{source['line']}",
-                        sink_type=sink['type'],
-                        sink_location=f"{sink['file']}:{sink['line']}",
-                        path=[source['file']],
-                        is_tainted=self._is_tainted(source['type'], sink['type']),
-                        risk_score=self._calculate_flow_risk(source['type'], sink['type'])
-                    ))
-        
-        return flows
-    
-    def _find_sources(self, repo_path: Path) -> List[Dict]:
-        """Find data sources"""
-        sources = []
-        
-        patterns = {
-            'user_input': r'input\s*\(',
-            'file_read': r'open\s*\([^)]*[\'"]r',
-            'network': r'recv\s*\(',
-            'env': r'os\.environ'
-        }
-        
-        for py_file in repo_path.rglob("*.py"):
-            if '.git' in py_file.parts:
-                continue
-            
-            try:
-                with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                
-                for source_type, pattern in patterns.items():
-                    for match in re.finditer(pattern, content):
-                        line_num = content[:match.start()].count('\n') + 1
-                        sources.append({
-                            'type': source_type,
-                            'file': str(py_file.relative_to(repo_path)),
-                            'line': line_num
-                        })
-            except:
-                pass
-        
-        return sources
-    
-    def _find_sinks(self, repo_path: Path) -> List[Dict]:
-        """Find data sinks"""
-        sinks = []
-        
-        patterns = {
-            'exec': r'exec\s*\(',
-            'network': r'send\s*\(',
-            'file_write': r'open\s*\([^)]*[\'"]w',
-            'database': r'execute\s*\('
-        }
-        
-        for py_file in repo_path.rglob("*.py"):
-            if '.git' in py_file.parts:
-                continue
-            
-            try:
-                with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                
-                for sink_type, pattern in patterns.items():
-                    for match in re.finditer(pattern, content):
-                        line_num = content[:match.start()].count('\n') + 1
-                        sinks.append({
-                            'type': sink_type,
-                            'file': str(py_file.relative_to(repo_path)),
-                            'line': line_num
-                        })
-            except:
-                pass
-        
-        return sinks
-    
-    def _is_tainted(self, source_type: str, sink_type: str) -> bool:
-        """Check if flow is tainted"""
-        dangerous_flows = [
-            ('user_input', 'exec'),
-            ('network', 'exec'),
-            ('env', 'network'),
-            ('file_read', 'network')
-        ]
-        
-        return (source_type, sink_type) in dangerous_flows
-    
-    def _calculate_flow_risk(self, source_type: str, sink_type: str) -> float:
-        """Calculate risk score for data flow"""
-        risk_matrix = {
-            ('user_input', 'exec'): 1.0,
-            ('network', 'exec'): 0.9,
-            ('env', 'network'): 0.8,
-            ('file_read', 'network'): 0.7,
-            ('user_input', 'file_write'): 0.6
-        }
-        
-        return risk_matrix.get((source_type, sink_type), 0.3)
+# Local helper classes have been moved to analyzers.comprehensive
 
 def main():
     """Main entry point"""

@@ -100,7 +100,7 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
                 tokens_used = completion.usage.total_tokens
                 self.total_tokens_used += tokens_used
             
-            return LLMResponse(
+            response = LLMResponse(
                 file_path=request.file_path,
                 analysis_type=request.analysis_type,
                 findings=findings,
@@ -109,6 +109,8 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
                 tokens_used=tokens_used,
                 analysis_time=time.time() - start_time
             )
+            # Enforce response policy (e.g., no external dependency recommendations)
+            return self.sanitize_response(response)
             
         except Exception as e:
             print(f"Cerebras analysis error: {str(e)}")
@@ -211,8 +213,9 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
                     print(f"Failed to parse batch JSON for files: {file_list}")
             
             batch_results = self._parse_batch_response(response_text, batch)
-            
-            return batch_results
+            # Enforce response policy on each result
+            sanitized = [self.sanitize_response(r) for r in batch_results]
+            return sanitized
             
         except Exception as e:
             # Return empty responses for all requests in batch
@@ -241,64 +244,7 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
         }
         return mapping.get(analysis_type)
     
-    def _parse_json_response(self, response_text: str) -> Optional[Dict]:
-        """Parse JSON from LLM response with robust error handling"""
-        if not response_text:
-            return None
-        
-        try:
-            # Try to extract JSON from response
-            if '```json' in response_text:
-                json_start = response_text.find('```json') + 7
-                json_end = response_text.find('```', json_start)
-                json_str = response_text[json_start:json_end].strip()
-            elif '{' in response_text or '[' in response_text:
-                # Find first { or [ and last } or ]
-                start_brace = response_text.find('{')
-                start_bracket = response_text.find('[')
-                
-                if start_brace == -1:
-                    json_start = start_bracket
-                elif start_bracket == -1:
-                    json_start = start_brace
-                else:
-                    json_start = min(start_brace, start_bracket)
-                
-                if json_start == -1:
-                    return None
-                
-                # Find matching end
-                if response_text[json_start] == '{':
-                    json_end = response_text.rfind('}') + 1
-                else:
-                    json_end = response_text.rfind(']') + 1
-                
-                json_str = response_text[json_start:json_end]
-            else:
-                return None
-            
-            # Clean up common JSON issues before parsing
-            # Remove trailing commas before closing brackets/braces
-            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
-            
-            # Fix missing commas between string values
-            json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
-            
-            # Fix missing commas between objects
-            json_str = re.sub(r'}\s*\n\s*{', '},\n{', json_str)
-            
-            # Try to parse
-            return json.loads(json_str)
-            
-        except json.JSONDecodeError as e:
-            # Only log if it's not a common issue we've already tried to fix
-            if "Expecting ',' delimiter" not in str(e):
-                # Don't print here - will be handled by caller
-                pass
-            return None
-        except Exception as e:
-            # Don't print here - will be handled by caller
-            return None
+    # Use shared _parse_json_response from BaseLLMAnalyzer
     
     def _parse_batch_response(self, response_text: str, batch: List[LLMRequest]) -> List[LLMResponse]:
         """Parse batch response and map to individual requests"""

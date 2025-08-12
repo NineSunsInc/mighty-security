@@ -65,6 +65,7 @@ Thumbs.db
 *.sqlite3
 mcp_behavior.db
 mcp_security.log
+internal/
 
 # Reports and outputs
 security_report_*.json

@@ -9,6 +9,9 @@ dependencies = [
     "modal>=1.1.1",
 ]
 
+[project.scripts]
+mcp-scan = "analyzers.comprehensive_mcp_analyzer:main"
+
 [tool.uv.workspace]
 members = [
     "flask-mcp-api",

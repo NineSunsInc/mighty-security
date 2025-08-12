@@ -15,9 +15,9 @@ from .base_analyzer import BaseLLMAnalyzer, LLMRequest, AnalysisType
 from .cerebras_analyzer import CerebrasAnalyzer
 from .context_optimizer import SmartFileRanker, AnalysisTracker, FileImportance
 
-# Try to import ML analyzer
+# Try to import semantic analyzer (new path)
 try:
-    from src.ml.comprehensive_analyzer import ComprehensiveSecurityAnalyzer
+    from src.semantics.semantic_security_analyzer import SemanticSecurityAnalyzer
     HAS_ML_ANALYZER = True
 except ImportError:
     HAS_ML_ANALYZER = False
@@ -36,8 +36,8 @@ class LLMAnalysisCoordinator:
             # Future: Add OpenAI, Anthropic, etc.
             self.llm_analyzer = CerebrasAnalyzer(api_key)
         
-        # Initialize ML analyzer if available
-        self.ml_analyzer = ComprehensiveSecurityAnalyzer() if HAS_ML_ANALYZER else None
+        # Initialize semantic analyzer if available
+        self.ml_analyzer = SemanticSecurityAnalyzer() if HAS_ML_ANALYZER else None
         
     async def analyze_with_llm_and_ml(
         self,
@@ -175,17 +175,13 @@ class LLMAnalysisCoordinator:
             return None
         
         try:
-            # Prepare tool config for ML analyzer
+            # Prepare tool config for semantic analyzer (async)
             tool_config = {
                 'name': Path(file_path).stem,
                 'description': f'File: {file_path}',
                 'code': content
             }
-            
-            # Run sync method in executor for async compatibility
-            import asyncio
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self.ml_analyzer.analyze, tool_config)
+            result = await self.ml_analyzer.analyze(tool_config)
             return {
                 'file_path': file_path,
                 'analysis': result

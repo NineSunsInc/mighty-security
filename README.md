@@ -76,6 +76,23 @@ MCP tools are becoming critical infrastructure for AI applications, but they pre
 - Poor at detecting sophisticated or indirect attacks
 - Many false positives on safe code
 
+## ✨ What’s new (architecture + early improvements)
+
+We’ve started a major hardening effort to align with standard static-analysis practices (OWASP/ASVS, CodeQL/Semgrep-style rule packs) and to reduce false positives by backing findings with evidence.
+
+- Orchestrator stays thin; rules and engines live in dedicated modules:
+  - `analyzers/security/` for specialized rules (e.g., SSRF, credentials)
+  - `analyzers/taint/` for inter-procedural data-flow (source→sink) with `FlowTrace`
+  - `src/semantics/` for semantic ensemble and LLM coordination
+- Immediate, user-visible improvements:
+  - Generic secret detection in code and JSON configs (including `mcp.json`): detects private keys, JWTs, common API token formats, and high-entropy strings
+  - CWE tagging in findings (e.g., `CWE-918` for SSRF, `CWE-77` for command injection)
+- Experimental scaffolding (present, but not fully active yet):
+  - SSRF rule hooks on `requests.*` callsites
+  - Inter-procedural taint analysis wiring in the deep phase
+
+These experimental modules are stubbed today and won’t change your results until the rule logic is completed in upcoming commits. Secret detection is active now and will show up when secrets are present.
+
 ## 🚀 Quick Start
 
 The NextJS Leaderboard and scanning codebase is located [here](https://github.com/olivercarmont/mighty-security-web-app)
@@ -99,7 +116,7 @@ source .venv/bin/activate  # IMPORTANT: Always activate the virtual environment!
 pip install -U pip
 pip install -e .
 
-# Optional: enable ML features used by src/ml/*
+# Optional: enable ML features used by src/semantics/*
 pip install transformers torch sentence-transformers scikit-learn networkx gitpython
 
 # Optional: enable LLM-powered analysis (Cerebras GPT-OSS-120B)
@@ -186,6 +203,51 @@ Mode: Deep Scan
    • Manual review strongly recommended
 ```
 
+### Super Evals (stress tests)
+
+Use these curated examples to validate detection:
+
+```bash
+# 1) SSRF unguarded (should flag SSRF risks – upcoming rule release)
+python analyzers/comprehensive_mcp_analyzer.py examples/super_evals/ssrf_unguarded
+
+# 2) SSRF guarded (should be low/no findings for SSRF)
+python analyzers/comprehensive_mcp_analyzer.py examples/super_evals/ssrf_guarded
+
+# 3) Credential exfiltration flow (should flag secret read + network send)
+python analyzers/comprehensive_mcp_analyzer.py examples/super_evals/creds_flow
+
+# 4) Indirect command execution (taint will catch in upcoming release)
+python analyzers/comprehensive_mcp_analyzer.py examples/super_evals/command_injection
+
+# 5) Secrets in mcp.json (active now: token/private key/JWT detection)
+python analyzers/comprehensive_mcp_analyzer.py examples/super_evals/mcp_secrets
+```
+
+## ❓ Why your report may look unchanged
+
+If you ran something like:
+
+```bash
+python analyzers/comprehensive_mcp_analyzer.py ./examples/suspicious_mixed
+```
+
+and didn’t see changes, that’s expected in this snapshot:
+
+- The new SSRF hooks and taint engine are scaffolds and don’t emit new findings yet (rule logic ships next).
+- The `suspicious_mixed` example doesn’t contain secrets, so the new secret detector won’t trigger.
+
+You can validate a visible improvement now by scanning examples that include secrets or credential access:
+
+```bash
+# Contains environment/credential access patterns
+python analyzers/comprehensive_mcp_analyzer.py ./examples/malicious_credential_theft
+
+# Or any repo with tokens in mcp.json/package.json to see credential findings
+```
+
+In the next release, SSRF and taint rules will start emitting findings with evidence-backed flow traces and missing-guard diagnostics.
+
 ## ⚠️ Important Limitations
 
 ### What This Tool CANNOT Do:
@@ -214,8 +276,15 @@ Mode: Deep Scan
 3. **Entropy Analysis**: Detects high-entropy (obfuscated) code
 4. **File Fingerprinting**: SHA-512/SHA3-512 hashes for integrity
 5. **Basic Scoring**: Weighted threat scoring (needs improvement)
-6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.SecurityModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints "ML Score"). Falls back to a lightweight local heuristic otherwise.
+6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.ModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints "ML Score"). Falls back to a lightweight local heuristic otherwise.
 7. **LLM Integration (--llm flag)**: When enabled with Cerebras API key, uses GPT-OSS-120B for deep semantic analysis, providing contextual threat detection beyond pattern matching
+
+### What’s different now under the hood
+- The orchestrator wires in:
+  - Secret detection (active)
+  - SSRF rule hook (scaffolded)
+  - Taint engine (scaffolded) → converts `FlowTrace` to `DataFlow` + `ThreatIndicator`
+- Findings can include `cwe_ids` and structured evidence (e.g., missing SSRF guards, snippet previews, flow paths).
 
 ## 🎯 Real-World Performance
 
@@ -268,6 +337,11 @@ examples/
 - Add proper data flow analysis
 - Implement context-aware detection
 - Reduce false positive rate
+
+### Near-term milestones (actively in progress)
+- Implement SSRF guard checks (host/IP validation, redirect policy, `file://` ban) → emit `CWE-918`
+- Implement credential rules for common secret stores and sensitive paths → pair with network sinks for CRITICAL
+- Inter-procedural taint flows for user_input→exec and sensitive_read→network, producing path evidence
 
 ### Future Improvements
 - Add machine learning models (currently claimed but not implemented)

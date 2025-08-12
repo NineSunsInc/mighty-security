@@ -27,7 +27,7 @@ By contributing, you help make the MCP ecosystem safer. Please read this documen
   pip install -U pip
   pip install -e .
   ```
-- **Optional ML features** (enables advanced analysis paths used in `src/ml/*`):
+- **Optional ML features** (enables advanced analysis paths used in `src/semantics/*`):
   ```bash
   pip install transformers torch sentence-transformers scikit-learn networkx gitpython
   ```
@@ -69,12 +69,12 @@ Before adding new modules or helpers, search the codebase to avoid duplication a
   python3 tests/test_real_mcp_servers.py --url https://github.com/modelcontextprotocol/servers
   ```
 
-### About `src/ml` usage
+### About semantic analysis usage
 
-- The primary CLI (`analyzers/comprehensive_mcp_analyzer.py`) attempts to initialize the ML ensemble via `src/ml/model_integration.ModelEnsemble`. If the imports fail, it falls back to a local heuristic model and continues gracefully. This means:
-  - Without ML deps: you still get static + heuristic analysis (no crash).
-  - With ML deps: you also get ML ensemble scoring in the final report (see “ML Score” and explanations when printed).
-  - To develop ML features, install the optional dependencies listed in Quick Start.
+- The primary CLI (`analyzers/comprehensive_mcp_analyzer.py`) attempts to initialize the ensemble via `src/semantics/model_ensemble.ModelEnsemble`. If imports fail, it falls back to a local heuristic and continues gracefully. This means:
+  - Without ML deps: static + heuristic analysis (no crash).
+  - With ML deps: ML/semantic scoring is included in the final report (see “ML Score”).
+  - To develop semantic features, install the optional dependencies listed in Quick Start.
 
 Reports from full scans are written to `reports/` with a timestamped filename.
 
