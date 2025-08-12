@@ -77,11 +77,11 @@ class ComprehensiveReportFormatter:
         lines.append("📋 FINAL ASSESSMENT & SUMMARY")
         lines.append("=" * self.width)
         
-        # Overall verdict
+        # Overall verdict with explanations
         threat_emoji = self._get_threat_emoji(report.threat_level)
         lines.append(f"\n{threat_emoji} Overall Risk Assessment: {report.threat_level}")
-        lines.append(f"{self.indent}• Threat Score: {report.threat_score:.1%}")
-        lines.append(f"{self.indent}• Confidence Level: {report.confidence:.1%}")
+        lines.append(f"{self.indent}• Threat Score: {report.threat_score:.1%} (combined maliciousness rating)")
+        lines.append(f"{self.indent}• Confidence Level: {report.confidence:.1%} (analysis coverage & certainty)")
         
         # CRITICAL WARNING if any critical threats exist
         critical_count = sum(1 for t in report.threats_found if str(t.severity) == 'ThreatSeverity.CRITICAL' or str(t.severity) == 'CRITICAL')
@@ -103,9 +103,17 @@ class ComprehensiveReportFormatter:
         
         if severity_counts:
             lines.append(f"{self.indent}• Severity Distribution:")
+            severity_info = {
+                'CRITICAL': '🔴 immediate compromise',
+                'HIGH': '🟠 significant risk',
+                'MEDIUM': '🟡 potential vulnerability',
+                'LOW': '🟢 minor concern',
+                'INFO': 'ℹ️ informational'
+            }
             for severity in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']:
                 if severity in severity_counts:
-                    lines.append(f"{self.indent}  - {severity}: {severity_counts[severity]}")
+                    info = severity_info.get(severity, '')
+                    lines.append(f"{self.indent}  - {severity}: {severity_counts[severity]} ({info})")
         
         # AI insights if available
         if hasattr(report, 'combined_ai_assessment') and report.combined_ai_assessment:
@@ -125,15 +133,17 @@ class ComprehensiveReportFormatter:
             if severity_order.get(threat_sev, 0) > severity_order.get(highest_severity, 0):
                 highest_severity = threat_sev
         
-        # Summary recommendation based on HIGHEST severity found
+        # Summary recommendation based on threat_score primarily, using severity as secondary indicator
         lines.append(f"\n💡 Final Verdict:")
-        if highest_severity == 'CRITICAL' or report.threat_score >= 0.8:
-            lines.append(f"{self.indent}⛔ DO NOT USE - Critical security issues detected")
+        
+        # Use threat_score as primary determinant, aligning with threat_level from analyzer
+        if report.threat_score >= 0.8:
+            lines.append(f"{self.indent}⛔ CRITICAL RISK - Do not use")
             lines.append(f"{self.indent}🔴 This code poses immediate and severe security risks")
-        elif highest_severity == 'HIGH' or report.threat_score >= 0.6:
+        elif report.threat_score >= 0.6:
             lines.append(f"{self.indent}⚠️ HIGH RISK - Extensive review and remediation required")
             lines.append(f"{self.indent}🟠 Significant security concerns must be addressed")
-        elif highest_severity == 'MEDIUM' or report.threat_score >= 0.4:
+        elif report.threat_score >= 0.4:
             lines.append(f"{self.indent}⚠️ MODERATE RISK - Review and address issues before use")
             lines.append(f"{self.indent}🟡 Several security issues need attention")
         elif report.threat_score >= 0.2:

@@ -104,8 +104,10 @@ CONSTRAINTS:
 OUTPUT POLICY (MANDATORY):
 - Return ONLY a single JSON object matching the requested schema.
 - Do not include any prose before or after the JSON.
-- If unsure, return an empty JSON object: {}.
-- Prefer wrapping your output in a fenced code block starting with ```json and ending with ```.
+- Begin the output with a line containing exactly: JSON_START
+- End the output with a line containing exactly: JSON_END
+- If unsure, return an empty JSON object: {} between these sentinels.
+- It is OK to also wrap the JSON in a fenced code block, but the sentinels MUST be present.
 
 IMPORTANT: Be concise but thorough. Prioritize findings by actual exploitability."""
 
@@ -361,9 +363,10 @@ CODE TO ANALYZE:
 ```
 
 ANALYSIS OUTPUT FORMAT (STRICT):
-Return ONLY a single JSON object in a fenced JSON block. Do not include any text before or after.
+Return ONLY a single JSON object. Do not include any text before or after.
+Begin with JSON_START and end with JSON_END on their own lines.
 Example:
-```json
+JSON_START
 {{
     "findings": [
         {{
@@ -379,12 +382,12 @@ Example:
     "risk_score": 0.0-1.0,
     "summary": "brief overall assessment"
 }}
-```
+JSON_END
 
 If you cannot produce a valid JSON object for any reason, return:
-```json
+JSON_START
 {{}}
-```
+JSON_END
 
 Focus on real, exploitable vulnerabilities. Avoid false positives.
 Strictly avoid suggesting new dependencies or package installation commands in remediation or summary.""")
@@ -414,7 +417,17 @@ For each snippet, identify HIGH/CRITICAL vulnerabilities related to:
 - Data exfiltration
 - Credential theft
 
-Return ONLY a JSON array (and nothing else). Wrap it in a fenced json code block.
+Return ONLY a single JSON object keyed by the exact file path of each snippet. The value for each key must match the schema:
+{
+  "<file_path>": {
+    "findings": [ { "severity": ..., "attack_vector": ..., "description": ..., "line_numbers": [], "exploitation_scenario": "", "remediation": "", "confidence": 0.0 } ],
+    "risk_score": 0.0-1.0,
+    "summary": "..."
+  },
+  ...
+}
+
+Begin with JSON_START and end with JSON_END on their own lines. Do not include any other text.
 """
         
         return prompt

@@ -113,9 +113,21 @@ class SmartFileRanker:
         files: Dict[str, str],  # file_path -> content
         static_threats: List[Any],
         semantic_graph: Optional[Any] = None,
-        max_files: int = 20
+        max_files: Optional[int] = None,  # Optional limit, defaults to None (all files)
+        min_score_threshold: float = 0.01  # Minimum score to include
     ) -> List[FileRankingScore]:
-        """Rank files by importance for LLM analysis"""
+        """Rank files by importance for LLM analysis
+        
+        Args:
+            files: Map of file paths to content
+            static_threats: List of detected threats
+            semantic_graph: Optional dependency graph
+            max_files: Optional limit on number of files (None = no limit)
+            min_score_threshold: Minimum score to include file (filters out noise)
+        
+        Returns:
+            Sorted list of FileRankingScore objects
+        """
         
         rankings = []
         threat_map = self._build_threat_map(static_threats)
@@ -134,13 +146,17 @@ class SmartFileRanker:
                 dependency_map.get(file_path, 0)
             )
             
-            rankings.append(ranking)
+            # Only include files above minimum threshold
+            if ranking.total_score >= min_score_threshold:
+                rankings.append(ranking)
         
         # Sort by total score (highest first)
         rankings.sort(key=lambda x: x.total_score, reverse=True)
         
-        # Return top N files
-        return rankings[:max_files]
+        # Apply optional limit
+        if max_files is not None:
+            return rankings[:max_files]
+        return rankings
     
     def _calculate_ranking(
         self,

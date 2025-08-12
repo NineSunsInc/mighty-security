@@ -480,7 +480,8 @@ class ComprehensiveMCPAnalyzer:
                         repo_path,
                         static_results,
                         dep_graph,  # semantic graph if available
-                        max_files=20  # Analyze top 20 files
+                        max_files=None,  # Dynamic selection based on context window
+                        use_dynamic_batching=True  # Use intelligent batching
                     )
                 )
                 

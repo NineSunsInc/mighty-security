@@ -97,8 +97,13 @@ class BaseLLMAnalyzer(ABC):
             return None
 
         try:
+            # Highest priority: sentinel markers
+            if 'JSON_START' in response_text and 'JSON_END' in response_text:
+                start = response_text.find('JSON_START') + len('JSON_START')
+                end = response_text.find('JSON_END', start)
+                json_str = response_text[start:end].strip() if end > start else ''
             # Prefer fenced JSON if present
-            if '```json' in response_text:
+            elif '```json' in response_text:
                 json_start = response_text.find('```json') + 7
                 json_end = response_text.find('```', json_start)
                 json_str = response_text[json_start:json_end].strip()
@@ -157,6 +162,59 @@ class BaseLLMAnalyzer(ABC):
             return None
         except Exception:
             return None
+
+    def _normalize_llm_response_dict(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Validate and normalize a parsed LLM response into the expected schema.
+
+        Ensures keys exist with correct types and coerces values where reasonable.
+        """
+        if not isinstance(data, dict):
+            return None
+
+        normalized: Dict[str, Any] = {}
+
+        # Summary
+        normalized['summary'] = str(data.get('summary', ''))
+
+        # Risk score
+        try:
+            normalized['risk_score'] = float(data.get('risk_score', 0.0) or 0.0)
+        except Exception:
+            normalized['risk_score'] = 0.0
+
+        # Findings
+        findings_in = data.get('findings', [])
+        if not isinstance(findings_in, list):
+            findings_in = []
+
+        allowed_severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
+        normalized_findings: List[Dict[str, Any]] = []
+        for raw in findings_in:
+            if not isinstance(raw, dict):
+                continue
+            severity_val = str(raw.get('severity', 'MEDIUM')).upper()
+            severity = severity_val if severity_val in allowed_severities else 'MEDIUM'
+            try:
+                confidence = float(raw.get('confidence', 0.5) or 0.5)
+            except Exception:
+                confidence = 0.5
+            line_numbers = raw.get('line_numbers', []) or []
+            if not isinstance(line_numbers, list):
+                line_numbers = []
+
+            normalized_findings.append({
+                'severity': severity,
+                'attack_vector': raw.get('attack_vector', 'unknown') or 'unknown',
+                'description': raw.get('description', '') or '',
+                'line_numbers': line_numbers,
+                'confidence': confidence,
+                'exploitation_scenario': raw.get('exploitation_scenario', '') or '',
+                'remediation': raw.get('remediation', '') or '',
+                'evidence': raw.get('evidence', {}) or {},
+            })
+
+        normalized['findings'] = normalized_findings
+        return normalized
 
     def _extract_largest_json_object(self, text: str) -> Optional[str]:
         """Extract the largest balanced {...} block as a fallback."""

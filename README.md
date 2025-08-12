@@ -269,13 +269,65 @@ In the next release, SSRF and taint rules will start emitting findings with evid
 - Cannot detect time bombs or logic bombs
 - Misses obfuscated payloads
 
+## 📊 Scoring System Documentation
+
+### Understanding the Threat Score
+
+The **Threat Score** (0-100%) represents the combined maliciousness rating of the analyzed code. It's calculated using multiple factors:
+
+#### Threat Score Calculation
+```
+threat_score = weighted_average(
+    pattern_threats * 0.35,    # Direct threat patterns found
+    data_flows * 0.25,         # Dangerous data flow patterns
+    behaviors * 0.20,          # Suspicious behavioral indicators
+    ml_score * 0.20            # Machine learning analysis (if enabled)
+)
+```
+
+#### Risk Levels Based on Threat Score
+- **CRITICAL** (≥80%): 🔴 Immediate compromise - Do not use
+- **HIGH** (≥60%): 🟠 Significant risk - Extensive review required
+- **MEDIUM** (≥40%): 🟡 Potential vulnerability - Review before use
+- **LOW** (≥20%): 🟢 Minor concern - Generally safe with improvements
+- **MINIMAL** (<20%): ✅ Safe for use - Standard precautions apply
+
+### Severity Levels Explained
+
+Each individual threat is assigned a severity level:
+
+- **CRITICAL**: 🔴 Immediate security compromise (e.g., direct command execution, credential theft)
+- **HIGH**: 🟠 Significant security risk (e.g., unvalidated user input, SSRF vulnerabilities)
+- **MEDIUM**: 🟡 Potential vulnerability (e.g., obfuscation, suspicious patterns)
+- **LOW**: 🟢 Minor security concern (e.g., outdated dependencies, code quality issues)
+- **INFO**: ℹ️ Informational finding (e.g., best practice recommendations)
+
+### Confidence Level
+
+The **Confidence Level** (0-100%) indicates the analysis coverage and certainty:
+- **90-100%**: Complete analysis with high certainty
+- **70-89%**: Good coverage with reliable results
+- **50-69%**: Moderate coverage, some uncertainty
+- **<50%**: Limited analysis, results may be incomplete
+
+### Attack Vector Categories
+
+Threats are categorized by attack vector:
+- **COMMAND_INJECTION**: Code execution vulnerabilities
+- **DATA_EXFILTRATION**: Unauthorized data transmission
+- **CREDENTIAL_THEFT**: Attempts to steal secrets/credentials
+- **OBFUSCATION**: Hidden or encoded malicious code
+- **PROMPT_INJECTION**: LLM manipulation attempts
+- **NETWORK_BACKDOOR**: Remote access mechanisms
+- **PERSISTENCE**: Backdoor installation attempts
+
 ## 🔍 How It Works
 
 1. **Static Pattern Matching**: Uses regex patterns to find dangerous code
 2. **AST Analysis**: Basic Python AST parsing for some patterns
 3. **Entropy Analysis**: Detects high-entropy (obfuscated) code
 4. **File Fingerprinting**: SHA-512/SHA3-512 hashes for integrity
-5. **Basic Scoring**: Weighted threat scoring (needs improvement)
+5. **Weighted Threat Scoring**: Combines multiple signals into a unified score
 6. **Optional Semantic Ensemble**: If ML dependencies are installed, runs `src/semantics.ModelEnsemble` to compute an ML maliciousness score used in the final assessment (the CLI prints "ML Score"). Falls back to a lightweight local heuristic otherwise.
 7. **LLM Integration (--llm flag)**: When enabled with Cerebras API key, uses GPT-OSS-120B for deep semantic analysis, providing contextual threat detection beyond pattern matching
 
@@ -301,25 +353,92 @@ In the next release, SSRF and taint rules will start emitting findings with evid
 
 ## 🛠️ Technical Details
 
-### File Structure
+### File Structure & Purpose
+
 ```
 analyzers/
 ├── comprehensive_mcp_analyzer.py  # Main analyzer (use this)
+│   # Entry point for all security scans. Orchestrates pattern matching,
+│   # ML analysis, and report generation. Handles both local and GitHub repos.
+│
 ├── report_formatter.py            # Comprehensive report generation
+│   # Formats analysis results into readable reports with risk matrices,
+│   # threat breakdowns, and actionable recommendations.
+│
 ├── shared_constants.py            # Reusable patterns and constants
+│   # Contains all threat detection patterns, regex rules, and
+│   # severity mappings used across the analyzer.
+│
+├── security/                      # Specialized security modules
+│   ├── ssrf_detector.py          # SSRF vulnerability detection
+│   └── credential_scanner.py     # Secret/credential detection
+│
+├── taint/                         # Data flow analysis
+│   └── taint_analyzer.py         # Tracks data from source to sink
+│
 ├── llm/                           # LLM integration (--llm flag)
 │   ├── cerebras_analyzer.py      # Cerebras GPT-OSS-120B integration
+│   │   # Interfaces with Cerebras API for deep semantic analysis
+│   │
 │   ├── context_optimizer.py      # Smart file ranking for LLM
+│   │   # Prioritizes files for analysis within LLM context limits
+│   │
 │   ├── llm_integration.py        # Coordinates LLM analysis
+│   │   # Manages batch processing and result aggregation
+│   │
 │   └── prompts.py                # Security-focused prompts
+│       # Contains specialized prompts for threat detection
+│
 └── archive/                       # Old/experimental analyzers
+    # Legacy code and experimental features not in production
+
+src/
+├── semantics/                     # ML-based analysis
+│   ├── model_ensemble.py         # Ensemble ML models for threat detection
+│   ├── semantic_analyzer.py      # Code semantic understanding
+│   └── pattern_learner.py        # Pattern learning from examples
+│
+└── utils/                         # Utility functions
+    ├── file_processor.py          # File handling and parsing
+    ├── git_handler.py             # GitHub repository cloning
+    └── report_generator.py        # Report formatting utilities
 
 examples/
-├── malicious_command_injection/    # Test cases
-├── malicious_credential_theft/
-├── malicious_obfuscated/
-└── malicious_prompt_injection/
+├── malicious_command_injection/    # Test cases for command injection
+├── malicious_credential_theft/     # Credential theft examples
+├── malicious_obfuscated/          # Obfuscated code samples
+├── malicious_prompt_injection/     # Prompt injection tests
+├── suspicious_mixed/               # Mixed threat examples
+└── super_evals/                   # Comprehensive test suite
+    ├── ssrf_unguarded/            # SSRF without protection
+    ├── ssrf_guarded/              # SSRF with proper guards
+    ├── creds_flow/                # Credential flow tracking
+    ├── command_injection/         # Various injection patterns
+    └── mcp_secrets/               # Secrets in config files
+
+reports/                           # Generated security reports
+    # JSON and text reports from analysis runs
+
+docs/                              # Documentation
+    # Additional documentation and guides
 ```
+
+### Key Files Explained
+
+#### Core Analysis Engine
+- **comprehensive_mcp_analyzer.py**: The main orchestrator that coordinates all analysis modules, manages the scanning pipeline, and generates final threat scores.
+
+#### Detection Modules
+- **shared_constants.py**: Central repository of threat patterns, including regex for command injection, data exfiltration patterns, and suspicious API calls.
+- **ssrf_detector.py**: Identifies Server-Side Request Forgery vulnerabilities by analyzing HTTP request patterns and URL validation.
+- **credential_scanner.py**: Detects hardcoded credentials, API keys, and sensitive data patterns in code and configuration files.
+
+#### Analysis Enhancement
+- **taint_analyzer.py**: Performs inter-procedural data flow analysis to track how user input flows to dangerous sinks.
+- **model_ensemble.py**: Combines multiple ML models to provide a consensus threat score with reduced false positives.
+
+#### Reporting
+- **report_formatter.py**: Transforms raw analysis data into comprehensive, actionable security reports with severity ratings and remediation guidance.
 
 ### Threat Categories Checked
 - **COMMAND_INJECTION**: exec, eval, compile

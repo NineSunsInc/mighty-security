@@ -125,7 +125,61 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
             )
     
     def batch_analyze(self, requests: List[LLMRequest]) -> List[LLMResponse]:
-        """Batch analysis with smart batching for 64K context"""
+        """Batch analysis with dynamic batching for 64K context
+        
+        Uses intelligent batching to maximize context window utilization
+        while maintaining analysis quality.
+        """
+        try:
+            from .dynamic_batcher import DynamicBatchOptimizer, TokenEstimate
+        except ImportError:
+            # Fallback to simple batching
+            return self._simple_batch_analyze(requests)
+        
+        responses = []
+        optimizer = DynamicBatchOptimizer(model_context_size=self.max_context_tokens)
+        
+        # Convert requests to format expected by optimizer
+        file_contents = {req.file_path: req.code_snippet for req in requests}
+        
+        # Create fake FileRankingScore objects for compatibility
+        class FakeRanking:
+            def __init__(self, path, priority):
+                self.file_path = path
+                self.total_score = priority
+                self.importance = type('obj', (object,), {'name': 'HIGH'})()
+                self.risk_indicators = []
+                self.key_functions = []
+                self.external_calls = []
+            def get_context_summary(self):
+                return {}
+        
+        ranked_files = [FakeRanking(req.file_path, req.priority) for req in requests]
+        
+        # Get optimized batches
+        batches = optimizer.calculate_optimal_batches(
+            ranked_files,
+            file_contents,
+            strategy='adaptive'
+        )
+        
+        # Process each batch
+        for batch in batches:
+            batch_requests = []
+            for file_data in batch.files:
+                # Find matching request
+                matching_req = next((r for r in requests if r.file_path == file_data['path'].split('#')[0]), None)
+                if matching_req:
+                    batch_requests.append(matching_req)
+            
+            if batch_requests:
+                batch_response = self._process_batch(batch_requests)
+                responses.extend(batch_response)
+        
+        return responses
+    
+    def _simple_batch_analyze(self, requests: List[LLMRequest]) -> List[LLMResponse]:
+        """Fallback simple batching if dynamic batcher not available"""
         responses = []
         current_batch = []
         current_tokens = 0

@@ -44,9 +44,18 @@ class LLMAnalysisCoordinator:
         repo_path: Path,
         static_results: Dict[str, Any],
         semantic_graph: Optional[Any] = None,
-        max_files: int = 20
+        max_files: Optional[int] = None,  # None = dynamic based on context
+        use_dynamic_batching: bool = True
     ) -> Dict[str, Any]:
-        """Perform coordinated LLM and ML analysis"""
+        """Perform coordinated LLM and ML analysis
+        
+        Args:
+            repo_path: Path to repository
+            static_results: Results from static analysis
+            semantic_graph: Optional dependency graph
+            max_files: Optional limit on files (None = smart selection based on context)
+            use_dynamic_batching: Use dynamic batching to maximize context usage
+        """
         
         results = {
             'llm_analysis': {},
@@ -59,20 +68,40 @@ class LLMAnalysisCoordinator:
         # Get file contents
         file_contents = self._load_file_contents(repo_path, static_results)
         
-        # Rank files for analysis
-        ranked_files = self.ranker.rank_files_for_analysis(
-            file_contents,
-            static_results.get('threats_found', []),
-            semantic_graph,
-            max_files
-        )
+        # Rank files for analysis with dynamic selection
+        if use_dynamic_batching and max_files is None:
+            # Let the ranker decide based on importance scores
+            ranked_files = self.ranker.rank_files_for_analysis(
+                file_contents,
+                static_results.get('threats_found', []),
+                semantic_graph,
+                max_files=None,  # No limit, filter by score
+                min_score_threshold=0.05  # Only exclude very low scores
+            )
+        else:
+            # Use specified limit or default
+            ranked_files = self.ranker.rank_files_for_analysis(
+                file_contents,
+                static_results.get('threats_found', []),
+                semantic_graph,
+                max_files=max_files or 50  # Default to 50 if specified
+            )
         
         # Initialize tracker
         self.tracker = AnalysisTracker(total_files=len(ranked_files))
         
-        # Analyze files in priority order
-        llm_findings = []
-        ml_findings = []
+        # Use dynamic batching if enabled
+        if use_dynamic_batching:
+            llm_findings = await self._batch_analyze_with_dynamic(
+                ranked_files,
+                file_contents,
+                static_results
+            )
+            ml_findings = []
+        else:
+            # Original sequential analysis
+            llm_findings = []
+            ml_findings = []
         
         for ranking in ranked_files:
             # Skip minimal importance files if we're over budget
@@ -137,6 +166,102 @@ class LLMAnalysisCoordinator:
         }
         
         return results
+    
+    async def _batch_analyze_with_dynamic(
+        self,
+        ranked_files: List[Any],
+        file_contents: Dict[str, str],
+        static_results: Dict[str, Any]
+    ) -> List[Any]:
+        """Batch analyze files using dynamic batching"""
+        try:
+            from .dynamic_batcher import DynamicBatchOptimizer
+        except ImportError:
+            # Fallback to sequential if dynamic batcher not available
+            return await self._sequential_analyze(ranked_files, file_contents)
+        
+        optimizer = DynamicBatchOptimizer(model_context_size=self.llm_analyzer.max_context_tokens)
+        
+        # Get optimized batches
+        batches = optimizer.calculate_optimal_batches(
+            ranked_files,
+            file_contents,
+            strategy='adaptive'
+        )
+        
+        # Prepare batch requests
+        all_requests = []
+        for batch in batches:
+            batch_requests = []
+            for file_data in batch.files:
+                # Create LLM request for each file
+                file_path = file_data['path'].split('#')[0]  # Handle chunked files
+                context = file_data.get('context', {})
+                
+                request = LLMRequest(
+                    file_path=file_path,
+                    code_snippet=file_data['content'],
+                    analysis_type=self._determine_analysis_type(context),
+                    context=context,
+                    priority=file_data.get('score', 0.5),
+                    max_tokens=2000 if file_data.get('importance') == 'CRITICAL' else 1000
+                )
+                batch_requests.append(request)
+            
+            if batch_requests:
+                all_requests.extend(batch_requests)
+        
+        # Process all requests through batch analyzer
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None, 
+                self.llm_analyzer.batch_analyze, 
+                all_requests
+            )
+            
+            # Update tracker with results
+            for result in results:
+                if result and hasattr(result, 'findings'):
+                    self.tracker.add_file_result(
+                        result.file_path,
+                        result.findings,
+                        result.risk_score
+                    )
+            
+            return results
+            
+        except Exception as e:
+            print(f"Batch analysis failed: {e}")
+            # Fallback to sequential
+            return await self._sequential_analyze(ranked_files, file_contents)
+    
+    async def _sequential_analyze(
+        self,
+        ranked_files: List[Any],
+        file_contents: Dict[str, str]
+    ) -> List[Any]:
+        """Fallback sequential analysis"""
+        findings = []
+        for ranking in ranked_files[:50]:  # Limit to 50 files for sequential
+            if ranking.importance == FileImportance.MINIMAL and self.tracker.analyzed_files > 10:
+                continue
+            
+            file_path = ranking.file_path
+            content = file_contents.get(file_path, "")
+            
+            if content:
+                result = await self._analyze_file_with_llm(
+                    file_path,
+                    content,
+                    ranking.get_context_summary(),
+                    ranking.importance
+                )
+                if result:
+                    findings.append(result)
+        
+        return findings
     
     async def _analyze_file_with_llm(
         self, 
@@ -408,7 +533,7 @@ class LLMAnalysisCoordinator:
                 from shared_constants import get_scannable_files
             # Get some code files to analyze
             code_files = get_scannable_files(repo_path, include_configs=False, include_security=False)
-            for file_path in code_files[:20]:  # Limit to 20 files
+            for file_path in code_files[:100]:  # Increase limit to 100 files
                 rel_path = str(file_path.relative_to(repo_path))
                 files_analyzed.add(rel_path)
         
