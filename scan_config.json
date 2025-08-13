@@ -19,7 +19,8 @@
       "severity_adjustments": {
         "test_code": "ignore",
         "example_code": "ignore",
-        "generated_code": "low"
+        "generated_code": "low",
+        "security_tool_patterns": "info"
       },
       "context_aware": true
     },
@@ -96,9 +97,10 @@
       "content_patterns": ["# Example:", "# Demo:", "if __name__ == '__main__':"]
     },
     "security_tool_indicators": {
-      "imports": ["ast", "inspect", "bandit", "pylint"],
-      "class_patterns": ["Analyzer", "Scanner", "Detector", "Auditor"],
-      "function_patterns": ["detect_", "scan_", "analyze_", "audit_"]
+      "imports": ["ast", "inspect", "bandit", "pylint", "re", "hashlib"],
+      "class_patterns": ["Analyzer", "Scanner", "Detector", "Auditor", "Hook", "SecurityHook", "Proxy"],
+      "function_patterns": ["detect_", "scan_", "analyze_", "audit_", "_detect_", "_sanitize_"],
+      "path_patterns": ["/hooks/", "/analyzers/", "/security/", "/scanners/"]
     },
     "generated_indicators": {
       "path_patterns": ["__pycache__", ".pyc", "generated/"],

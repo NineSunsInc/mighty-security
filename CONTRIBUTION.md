@@ -85,6 +85,17 @@ source .venv/bin/activate  # macOS/Linux
 
 ### Running Tests
 
+**IMPORTANT: Run all tests before submitting a PR:**
+```bash
+# Run the full test suite (recommended)
+cd tests/
+./run_all_tests.sh
+
+# Or from project root:
+bash tests/run_all_tests.sh
+```
+
+Individual test commands:
 - Create local test cases (safe/malicious examples):
   ```bash
   python3 tests/create_test_cases.py
@@ -158,7 +169,8 @@ Reports from full scans are written to `reports/` with a timestamped filename.
 ### PR Checklist
 
 - [ ] Changes are scoped and readable
-- [ ] Analyzer runs locally: `python3 analyzers/comprehensive_mcp_analyzer.py .`
+- [ ] Analyzer runs locally: `python3 mighty_mcp.py check .`
+- [ ] All tests pass: `bash tests/run_all_tests.sh`
 - [ ] Relevant tests updated or added under `tests/`
 - [ ] No obvious false-positive regressions in safe examples
 - [ ] Docs updated if behavior or capabilities changed

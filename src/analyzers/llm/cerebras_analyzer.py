@@ -19,13 +19,14 @@ from .prompts import MCPSecurityPrompts, ThreatCategory
 class CerebrasAnalyzer(BaseLLMAnalyzer):
     """Cerebras-powered security analysis with GPT-OSS-120B"""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, debug: bool = False):
         super().__init__(max_context_tokens=64000)  # 64K context window
         self.client = Cerebras(
             api_key=api_key or os.environ.get("CEREBRAS_API_KEY")
         )
         self.model = "gpt-oss-120b"  # Cerebras GPT-OSS-120B model
         self.prompts = MCPSecurityPrompts()
+        self.debug = debug or os.environ.get("LLM_DEBUG", "").lower() == "true"
         
     def analyze(self, request: LLMRequest) -> LLMResponse:
         """Analyze code with Cerebras using centralized prompts"""
@@ -58,6 +59,17 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
             
             # Parse response
             response_text = completion.choices[0].message.content
+            
+            # Debug logging
+            if self.debug:
+                print(f"\n[DEBUG] LLM Response for {request.file_path}:")
+                print(f"[DEBUG] Raw response length: {len(response_text)} chars")
+                if len(response_text) < 500:
+                    print(f"[DEBUG] Full response: {response_text}")
+                else:
+                    print(f"[DEBUG] First 250 chars: {response_text[:250]}")
+                    print(f"[DEBUG] Last 250 chars: {response_text[-250:]}")
+            
             parsed_response = self._parse_json_response(response_text)
             
             # Log parsing error with file context (skip test files and pkg files)
@@ -74,6 +86,8 @@ class CerebrasAnalyzer(BaseLLMAnalyzer):
                 
                 if not should_skip_for_llm(request.file_path):
                     print(f"Failed to parse JSON for {request.file_path}: Response too malformed")
+                    if self.debug:
+                        print(f"[DEBUG] Parsing failed. Response was: {response_text[:500]}")
             
             # Convert to LLMFinding objects
             findings = []

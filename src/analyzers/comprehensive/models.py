@@ -18,6 +18,7 @@ class AttackVector(Enum):
     COMMAND_INJECTION = "command_injection"
     PROMPT_INJECTION = "prompt_injection"
     CREDENTIAL_THEFT = "credential_theft"
+    PACKAGE_HIJACK = "package_hijack"
     SUPPLY_CHAIN = "supply_chain_attack"
     PERSISTENCE = "persistence_mechanism"
     OBFUSCATION = "code_obfuscation"

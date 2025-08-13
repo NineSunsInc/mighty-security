@@ -234,3 +234,11 @@ Requires `CEREBRAS_API_KEY` in environment or `.env` file. The LLM provides enha
 - `docs/` - Architecture and usage documentation
 - `hooks/` - Runtime security hooks for MCP
 - `internal/` - Development notes and guides
+
+## IMPORT THINGS TO FOLLOW and KNOW
+- NEVER take shortcuts, the hard route is the only way to success.
+- We are here to make a security tool that helps detect for threats and alerts the developers or users so make sure the work we do can save lives.
+- This is an OSS project and we must document things and show a great sense of promise and growth. We are here to make the best software and community so never use jargon to explain something.
+- ALSO always follow DRY, instead of creating a new file, look and scan the project to make sure there are no other files that are similar. We want to maintain a clean space.
+- NEVER NEVER skip tests if they are failing, understand why it failed and propose a fix.
+- NEVER NEVER EVER delete files with `rm` or `rm -rf` without permissions.

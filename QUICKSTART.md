@@ -83,9 +83,19 @@ python3 mighty_mcp.py --help
 # Quick scan (faster, less thorough)
 python3 mighty_mcp.py check <target> --quick
 
-# Deep scan with AI analysis (requires API key)
+# Deep analysis with LLM (requires API key)
 echo "CEREBRAS_API_KEY=your_key" > .env
 python3 mighty_mcp.py check <target> --deep
+
+# Force fresh scan (bypass cache)
+python3 mighty_mcp.py check <target> --no-cache
+
+# Debug mode (shows LLM responses for troubleshooting)
+python3 mighty_mcp.py check <target> --deep --debug
+
+# Scan with specific profile
+python3 mighty_mcp.py check <target> --profile production  # Excludes test files
+python3 mighty_mcp.py check <target> --profile development  # Includes everything
 
 # Export scan results
 python3 mighty_mcp.py check <target> --output report.json
@@ -101,8 +111,9 @@ source .venv/bin/activate
 
 **Dashboard won't start:**
 ```bash
-# Port might be in use, try:
-python3 src/dashboard/app.py --port 8081
+# The dashboard auto-finds an available port if 8080 is in use!
+python3 src/dashboard/app.py
+# It will show you which port it's using
 ```
 
 **Can't find mighty_mcp.py:**

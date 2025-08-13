@@ -183,13 +183,15 @@ def cli(ctx):
               default='production', help='Scan profile (production excludes tests)')
 @click.option('--include-tests', is_flag=True, help='Include test directories (overrides profile)')
 @click.option('--no-context', is_flag=True, help='Disable context-aware analysis')
+@click.option('--no-cache', is_flag=True, help='Force fresh scan, ignore cache')
+@click.option('--debug', is_flag=True, help='Enable debug output for troubleshooting')
 @click.option('--policy', type=click.Path(exists=True), help='Custom policy file')
 @click.option('--output', '-o', help='Save report to file')
 @click.option('--format', type=click.Choice(['json', 'text', 'markdown', 'sarif']), 
               default='text', help='Output format')
 @click.option('--port', default=8080, help='Port for monitoring (with --realtime)')
 @click.pass_context
-def check_command(ctx, target, client, realtime, deep, quick, profile, include_tests, no_context, policy, output, format, port):
+def check_command(ctx, target, client, realtime, deep, quick, profile, include_tests, no_context, no_cache, debug, policy, output, format, port):
     """
     Universal security check command.
     
@@ -200,6 +202,8 @@ def check_command(ctx, target, client, realtime, deep, quick, profile, include_t
         mighty-mcp check --realtime         # Start monitoring
         mighty-mcp check --deep -o report   # Full analysis with report
     """
+    from src.analyzers.url_utils import is_github_url, is_url
+    
     security = ctx.obj['security']
     
     # Configure based on options
@@ -209,6 +213,10 @@ def check_command(ctx, target, client, realtime, deep, quick, profile, include_t
         security.config['enable_all'] = True
     if quick:
         security.config['quick_mode'] = True
+    if debug:
+        security.config['debug'] = True
+        import os
+        os.environ['LLM_DEBUG'] = 'true'  # Set environment variable for LLM debug
     
     # Configure profile and context settings
     security.config['profile'] = profile
@@ -229,6 +237,20 @@ def check_command(ctx, target, client, realtime, deep, quick, profile, include_t
                 click.echo("❌ Monitoring requires: pip install mighty-mcp[monitor]")
                 return
         
+        # Check if target is a URL (GitHub or otherwise)
+        elif target and (is_github_url(target) or is_url(target)):
+            click.echo(f"🔍 Analyzing repository: {target}...")
+            
+            # Use comprehensive analyzer for URL analysis
+            from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+            analyzer = ComprehensiveMCPAnalyzer(
+                deep_scan=not quick,
+                enable_llm=deep,
+                profile=security.config.get('profile', 'production')
+            )
+            result = analyzer.analyze_repository(target, no_cache=no_cache)
+            display_results(result, format, output)
+        
         # File/directory analysis
         elif target and Path(target).exists():
             click.echo(f"🔍 Analyzing {target}...")
@@ -242,7 +264,7 @@ def check_command(ctx, target, client, realtime, deep, quick, profile, include_t
                     enable_llm=deep,
                     profile=security.config.get('profile', 'production')
                 )
-                result = analyzer.analyze_repository(str(path))
+                result = analyzer.analyze_repository(str(path), no_cache=no_cache)
             else:
                 # Directory scan using comprehensive analyzer with profile
                 from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
@@ -251,8 +273,22 @@ def check_command(ctx, target, client, realtime, deep, quick, profile, include_t
                     enable_llm=deep,
                     profile=security.config.get('profile', 'production')
                 )
-                result = analyzer.analyze_repository(str(path))
+                result = analyzer.analyze_repository(str(path), no_cache=no_cache)
             
+            display_results(result, format, output)
+        
+        # If target is provided but not a file/directory/URL, treat as potential URL
+        elif target:
+            # Might be a URL without protocol or a typo
+            click.echo(f"🔍 Attempting to analyze: {target}...")
+            
+            from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+            analyzer = ComprehensiveMCPAnalyzer(
+                deep_scan=not quick,
+                enable_llm=deep,
+                profile=security.config.get('profile', 'production')
+            )
+            result = analyzer.analyze_repository(target, no_cache=no_cache)
             display_results(result, format, output)
         
         # System scan

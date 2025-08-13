@@ -29,12 +29,15 @@ class LLMAnalysisCoordinator:
         self.ranker = SmartFileRanker()
         self.tracker = None
         
-        # Initialize LLM analyzer
+        # Check for debug mode from environment
+        debug = os.environ.get('LLM_DEBUG', '').lower() == 'true'
+        
+        # Initialize LLM analyzer with debug flag
         if llm_provider == "cerebras":
-            self.llm_analyzer = CerebrasAnalyzer(api_key)
+            self.llm_analyzer = CerebrasAnalyzer(api_key, debug=debug)
         else:
             # Future: Add OpenAI, Anthropic, etc.
-            self.llm_analyzer = CerebrasAnalyzer(api_key)
+            self.llm_analyzer = CerebrasAnalyzer(api_key, debug=debug)
         
         # Initialize semantic analyzer if available
         self.ml_analyzer = SemanticSecurityAnalyzer() if HAS_ML_ANALYZER else None

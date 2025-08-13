@@ -107,6 +107,14 @@ class ContextAnalyzer:
         if context.is_generated:
             context.indicators.append("generated_path")
         
+        # Check if path indicates security tool
+        if "path_patterns" in self.config["context_detection"]["security_tool_indicators"]:
+            for pattern in self.config["context_detection"]["security_tool_indicators"]["path_patterns"]:
+                if pattern in file_path:
+                    context.is_security_tool = True
+                    context.indicators.append("security_tool_path")
+                    break
+        
         # Content-based detection if content provided
         if content:
             # Parse AST safely

@@ -6,7 +6,7 @@ from .models import AttackVector, ThreatSeverity
 def get_threat_patterns() -> Dict:
     """Return the comprehensive threat detection patterns used by the analyzer."""
     return {
-        AttackVector.COMMAND_INJECTION: {
+        AttackVector.COMMAND_INJECTION.value: {
             "patterns": [
                 (r"\bexec\s*\([^)]*\)", ThreatSeverity.CRITICAL, 0.95, "Direct exec() usage"),
                 (r"\beval\s*\([^)]*\)", ThreatSeverity.CRITICAL, 0.95, "Direct eval() usage"),
@@ -29,7 +29,7 @@ def get_threat_patterns() -> Dict:
                 ("Call", "compile", ThreatSeverity.HIGH),
             ],
         },
-        AttackVector.DATA_EXFILTRATION: {
+        AttackVector.DATA_EXFILTRATION.value: {
             "patterns": [
                 (r"requests\.(post|put|patch)\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "HTTP POST with data"),
                 (r"urllib.*urlopen\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "URL POST with data"),
@@ -59,16 +59,16 @@ def get_threat_patterns() -> Dict:
                 (["file_read", "base64_encode", "network_send"], 0.9, "Read-Encode-Send pattern")
             ],
         },
-        AttackVector.CREDENTIAL_THEFT: {
+        AttackVector.CREDENTIAL_THEFT.value: {
             "patterns": [
                 (
-                    r"os\.environ\[['\"][^'\"]*(PASSWORD|KEY|TOKEN|SECRET|CREDENTIAL)",
+                    r"os\.environ\[['\"][^'\"]*(PASSWORD|_KEY|TOKEN|SECRET|CREDENTIAL)",
                     ThreatSeverity.CRITICAL,
                     0.9,
                     "Environment credential access",
                 ),
                 (
-                    r"for\s+\w+\s+in\s+os\.environ.*?(PASSWORD|KEY|TOKEN|SECRET)",
+                    r"for\s+\w+\s+in\s+os\.environ.*?(PASSWORD|_KEY|TOKEN|SECRET)",
                     ThreatSeverity.CRITICAL,
                     0.95,
                     "Scanning environment for credentials",
@@ -112,7 +112,7 @@ def get_threat_patterns() -> Dict:
                 (r"setup\.py.*backdoor", ThreatSeverity.CRITICAL, 0.95, "Setup.py backdoor"),
             ]
         },
-        AttackVector.PROMPT_INJECTION: {
+        AttackVector.PROMPT_INJECTION.value: {
             "patterns": [
                 # Direct prompt injection patterns
                 (r"ignore\s+(all\s+)?previous\s+instructions", ThreatSeverity.CRITICAL, 0.95, "Prompt injection attempt"),
@@ -154,7 +154,23 @@ def get_threat_patterns() -> Dict:
                 r"before.*using.*tool",
             ],
         },
-        AttackVector.PERSISTENCE: {
+        AttackVector.PACKAGE_HIJACK.value: {
+            "patterns": [
+                # NPM script-based attacks
+                (r'"(preinstall|postinstall|prepare|prepublish)"\s*:\s*"[^"]*curl[^"]*\|[^"]*sh', ThreatSeverity.CRITICAL, 0.95, "Malicious npm install script downloading and executing"),
+                (r'"(preinstall|postinstall)"\s*:\s*"[^"]*wget[^"]*&&[^"]*python', ThreatSeverity.CRITICAL, 0.95, "Malicious npm script chaining commands"),
+                (r'"(preinstall|postinstall)"\s*:\s*"[^"]*(cat|echo)[^"]*\.(ssh|aws|env)', ThreatSeverity.CRITICAL, 0.9, "NPM script stealing credentials"),
+                (r'"(preinstall|postinstall)"\s*:\s*"[^"]*node\s+-e[^"]*child_process', ThreatSeverity.HIGH, 0.85, "NPM script with inline Node.js execution"),
+                (r'"(preinstall|postinstall)"\s*:\s*"[^"]*eval\(', ThreatSeverity.HIGH, 0.85, "NPM script with eval"),
+                (r'"(preinstall|postinstall)"\s*:\s*"[^"]*base64\s+-d', ThreatSeverity.HIGH, 0.8, "NPM script with base64 decode (obfuscation)"),
+                
+                # Suspicious dependencies
+                (r'"dependencies"[^}]*"[^"]*typo[^"]*":', ThreatSeverity.MEDIUM, 0.6, "Possible typosquatting package"),
+                (r'"dependencies"[^}]*"(expresss|lodsh|momnet|requst)":', ThreatSeverity.HIGH, 0.8, "Known typosquatting package"),
+            ],
+            "file_patterns": ["package.json", "package-lock.json"],
+        },
+        AttackVector.PERSISTENCE.value: {
             "patterns": [
                 (r"crontab\s*-[lr]", ThreatSeverity.HIGH, 0.85, "Crontab manipulation"),
                 (r"schtasks\s*/create", ThreatSeverity.HIGH, 0.85, "Windows task creation"),
@@ -166,7 +182,7 @@ def get_threat_patterns() -> Dict:
                 (r"service.*install", ThreatSeverity.HIGH, 0.8, "Service installation"),
             ]
         },
-        AttackVector.OBFUSCATION: {
+        AttackVector.OBFUSCATION.value: {
             "patterns": [
                 (r"base64\.b64decode\s*\(.*exec", ThreatSeverity.CRITICAL, 0.9, "Base64 encoded execution"),
                 (r"codecs\.decode\s*\([^)]*hex[^)]*exec", ThreatSeverity.CRITICAL, 0.9, "Hex decoded execution"),
@@ -179,7 +195,7 @@ def get_threat_patterns() -> Dict:
             ],
             "entropy_threshold": 5.5,
         },
-        AttackVector.NETWORK_BACKDOOR: {
+        AttackVector.NETWORK_BACKDOOR.value: {
             "patterns": [
                 (r"socket.*bind.*0\.0\.0\.0", ThreatSeverity.CRITICAL, 0.9, "Bind to all interfaces"),
                 (r"nc\s+-[lv].*-p\s*\d+", ThreatSeverity.CRITICAL, 0.9, "Netcat listener"),

@@ -98,10 +98,18 @@ class BaseLLMAnalyzer(ABC):
 
         try:
             # Highest priority: sentinel markers
-            if 'JSON_START' in response_text and 'JSON_END' in response_text:
+            if 'JSON_START' in response_text:
                 start = response_text.find('JSON_START') + len('JSON_START')
-                end = response_text.find('JSON_END', start)
-                json_str = response_text[start:end].strip() if end > start else ''
+                if 'JSON_END' in response_text:
+                    end = response_text.find('JSON_END', start)
+                    json_str = response_text[start:end].strip() if end > start else ''
+                else:
+                    # JSON_END missing (truncated response) - try to extract valid JSON
+                    json_str = response_text[start:].strip()
+                    # Attempt to close unclosed structures
+                    open_braces = json_str.count('{') - json_str.count('}')
+                    open_brackets = json_str.count('[') - json_str.count(']')
+                    json_str += ']' * open_brackets + '}' * open_braces
             # Prefer fenced JSON if present
             elif '```json' in response_text:
                 json_start = response_text.find('```json') + 7

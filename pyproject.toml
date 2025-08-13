@@ -16,6 +16,7 @@ dependencies = [
     "cerebras-cloud-sdk>=1.46.0",
     "modal>=1.1.1",
     "python-multipart>=0.0.20",
+    "nest-asyncio>=1.6.0",
 ]
 
 [project.scripts]

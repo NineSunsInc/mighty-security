@@ -1413,4 +1413,42 @@ def get_dashboard_html():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    import argparse
+    import socket
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='MCP Security Dashboard')
+    parser.add_argument('--port', type=int, default=8080, help='Port to run on (default: 8080)')
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    args = parser.parse_args()
+    
+    # Function to find available port
+    def find_available_port(start_port=8080, max_tries=10):
+        for port in range(start_port, start_port + max_tries):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            if result != 0:  # Port is available
+                return port
+        return None
+    
+    # Check if specified port is available, if not find another
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', args.port))
+    sock.close()
+    
+    if result == 0:  # Port is in use
+        print(f"⚠️  Port {args.port} is already in use, finding available port...")
+        available_port = find_available_port(args.port)
+        if available_port:
+            print(f"✅ Found available port: {available_port}")
+            args.port = available_port
+        else:
+            print(f"❌ No available ports found between {args.port} and {args.port + 10}")
+            print(f"Try specifying a different port: python3 {__file__} --port 9000")
+            sys.exit(1)
+    
+    print(f"🚀 Starting MCP Security Dashboard on http://localhost:{args.port}")
+    print(f"Press Ctrl+C to stop")
+    
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")

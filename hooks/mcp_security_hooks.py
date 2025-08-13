@@ -9,13 +9,10 @@ import sys
 import re
 import hashlib
 import time
-import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
-import subprocess
-import tempfile
 
 @dataclass
 class HookContext:

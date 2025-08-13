@@ -6,6 +6,7 @@
 
 ⚠️ **Important Note for Scanning This Project**: This repository contains intentionally malicious test files in `mcp_test_cases/` and `tests/` directories to validate our detection capabilities. When scanning this project:
 - **To exclude test files**: `python3 mighty_mcp.py check . --profile production`
+- **To force fresh scan (bypass cache)**: `python3 mighty_mcp.py check . --profile production --no-cache`
 - **To see detection working**: `python3 mighty_mcp.py check .` (will show CRITICAL risk - this is expected!)
 - The malicious test files prove our scanner works correctly
 
@@ -20,6 +21,14 @@ MCP servers are becoming critical infrastructure for AI applications, but recent
 - **30% allow unrestricted URL fetches (SSRF attacks)**  
 - **22% leak files outside intended directories**
 - The GitHub MCP vulnerability showed how prompt injection can leak private repositories
+
+## Recent Improvements
+
+### 🎯 **Context-Aware Detection** (NEW)
+- **Smart filtering**: Automatically detects security tools, test files, and examples
+- **Reduced false positives**: 70-90% reduction in false positives for security tooling code
+- **DRY pattern management**: Unified pattern configuration in `patterns_config.py`
+- **Cache control**: New `--no-cache` flag for fresh scans
 
 ## Features
 
@@ -153,8 +162,15 @@ http://localhost:8080
 ### Advanced Analysis
 
 ```bash
-# Deep analysis with LLM (requires CEREBRAS_API_KEY in .env)
+# Deep analysis with LLM (requires Cerebras API key)
+# First, set up your API key:
+echo "CEREBRAS_API_KEY=your_api_key_here" > .env
+
+# Then run deep analysis (includes LLM):
 python3 mighty_mcp.py check https://github.com/example/tool --deep
+
+# Note: When using the analyzer directly, use --llm instead:
+# python3 src/analyzers/comprehensive_mcp_analyzer.py <target> --llm
 
 # Real-time monitoring on custom port
 python3 mighty_mcp.py check --realtime --port 9090
@@ -170,6 +186,22 @@ python3 mighty_mcp.py check --output report.json --format json
 python3 mighty_mcp.py check examples/super_evals/ssrf_unguarded
 python3 mighty_mcp.py check examples/super_evals/command_injection
 python3 mighty_mcp.py check examples/super_evals/creds_flow
+```
+
+### Running the Test Suite
+
+```bash
+# Run all tests to verify the analyzer is working correctly
+cd tests/
+./run_all_tests.sh
+
+# Or from the project root:
+bash tests/run_all_tests.sh
+
+# Run specific test categories:
+python3 tests/comprehensive_test_suite.py  # Main detection accuracy test
+python3 tests/test_mcp_prompt_injection.py  # Prompt injection tests
+python3 tests/test_context_filtering.py    # Context-aware filtering tests
 ```
 
 ## Troubleshooting
@@ -202,9 +234,10 @@ chmod +x mighty_mcp.py
 
 **Dashboard won't start**
 ```bash
-# Check if port 8080 is already in use
-lsof -i :8080
-# Use a different port if needed
+# The dashboard now auto-finds an available port if 8080 is in use!
+python3 src/dashboard/app.py
+
+# Or manually specify a port:
 python3 src/dashboard/app.py --port 8081
 ```
 
