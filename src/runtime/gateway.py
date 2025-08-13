@@ -42,16 +42,6 @@ class SecurityGateway:
     def __init__(self, config: Optional[GatewayConfig] = None):
         self.config = config or GatewayConfig()
         self.wrapped_configs: Dict[str, str] = {}  # path -> backup_path
-        self.wrapper_command = self._get_wrapper_command()
-    
-    def _get_wrapper_command(self) -> List[str]:
-        """Get the wrapper command based on configuration"""
-        if self.config.source_dir:
-            # Running from source
-            return ["python", "-m", "secure_toolings.runtime.wrapper"]
-        else:
-            # Running installed package
-            return ["secure-mcp", "wrap"]
     
     async def inject(self, config_path: str) -> bool:
         """
@@ -127,23 +117,22 @@ class SecurityGateway:
     
     async def _wrap_stdio_server(self, name: str, server: Dict) -> Dict:
         """Wrap stdio-based server"""
-        wrapped = {
-            'command': self.wrapper_command[0],
-            'args': self.wrapper_command[1:] + [
-                '--mode', 'stdio',
-                '--server-name', name,
-                '--api-url', self.config.api_url,
-                '--exec', server['command']
-            ] + server.get('args', []),
-            'env': {
-                **server.get('env', {}),
-                'SECURE_MCP_API_URL': self.config.api_url,
-                'SECURE_MCP_SERVER': name
-            }
+        # Simpler approach - just add environment variables
+        # The proxy will handle the actual interception
+        wrapped = server.copy()
+        
+        wrapped['env'] = {
+            **server.get('env', {}),
+            'SECURE_MCP_API_URL': self.config.api_url,
+            'SECURE_MCP_SERVER': name,
+            'SECURE_MCP_WRAPPED': 'true'
         }
         
         if self.config.api_key:
             wrapped['env']['SECURE_MCP_API_KEY'] = self.config.api_key
+        
+        # Add marker for identification
+        wrapped['__secure_mcp__'] = True
         
         return wrapped
     
@@ -173,11 +162,14 @@ class SecurityGateway:
     def _is_wrapped(self, server: Dict) -> bool:
         """Check if server is already wrapped"""
         
-        # Check command-based wrapping
-        if server.get('command') in ['secure-mcp', 'python']:
-            args = server.get('args', [])
-            if any('secure_toolings' in str(arg) for arg in args):
-                return True
+        # Check for our marker
+        if server.get('__secure_mcp__'):
+            return True
+        
+        # Check environment variables
+        env = server.get('env', {})
+        if 'SECURE_MCP_WRAPPED' in env:
+            return True
         
         # Check URL-based wrapping
         url = server.get('url', '')

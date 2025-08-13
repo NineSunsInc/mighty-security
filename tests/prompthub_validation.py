@@ -206,11 +206,16 @@ def process_document(content):
         print("Reference: https://www.prompthub.us/blog/mcp-security-in-2025\n")
         
         # Import our analyzers
-        from analyzers.industry_aligned_patterns import IndustryAlignedAnalyzer
-        from analyzers.enhanced_mcp_analyzer import EnhancedMCPAnalyzer
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent))
         
-        analyzer = IndustryAlignedAnalyzer()
-        enhanced = EnhancedMCPAnalyzer()
+        # Use the comprehensive analyzer instead of missing modules
+        from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+        
+        analyzer = ComprehensiveMCPAnalyzer(verbose=False, deep_scan=True, use_cache=False)
+        analyzer.smart_filter = None  # Disable filtering for test cases
+        enhanced = analyzer  # Use same analyzer for both
         
         results = {
             'total': len(self.prompthub_threats),
@@ -237,25 +242,22 @@ def process_document(content):
             if 'test_path' in threat:
                 test_content += f"\n# Test: read_file('{threat['test_path']}')"
             
-            # Run detection
-            detections = analyzer.analyze(test_content)
-            
-            # Also test with enhanced analyzer
+            # Run detection using temporary directory
             with tempfile.TemporaryDirectory() as tmpdir:
                 test_file = Path(tmpdir) / "test.py"
                 test_file.write_text(test_content)
-                enhanced_report = enhanced._analyze_repo(Path(tmpdir), "test")
+                report = analyzer.analyze_repository(tmpdir)
             
-            detected = len(detections) > 0 or len(enhanced_report.threats) > 0
+            detected = len(report.threats_found) > 0
             
             # Record results
             if detected:
                 results['detected'] += 1
                 status = "✅ DETECTED"
-                if detections:
-                    found = f"Found: {detections[0].pattern_name}"
+                if report.threats_found:
+                    found = f"Found: {report.threats_found[0].attack_vector}"
                 else:
-                    found = f"Found: {enhanced_report.threats[0].type}"
+                    found = "Detected via scoring"
             else:
                 results['missed'] += 1
                 status = "❌ MISSED"

@@ -5,7 +5,7 @@ Comprehensive web interface for all MCP security scanning capabilities
 """
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import json
@@ -39,6 +39,12 @@ app = FastAPI(
     description="Comprehensive security scanning for MCP tools and configurations",
     version="2.0.0"
 )
+
+# Mount static files directory
+static_dir = Path(__file__).parent / "static"
+if not static_dir.exists():
+    static_dir.mkdir()
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Global instances for analyzers
 comprehensive_analyzer = ComprehensiveMCPAnalyzer()
@@ -105,15 +111,21 @@ SCAN_MODES = {
     }
 }
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def index():
-    """Enhanced dashboard with all scan modes"""
-    return HTMLResponse(content=get_dashboard_html())
+    """Serve the static dashboard HTML"""
+    html_file = Path(__file__).parent / "static" / "dashboard.html"
+    if html_file.exists():
+        return FileResponse(html_file)
+    else:
+        # Fallback to inline HTML if file doesn't exist
+        return HTMLResponse(content=get_dashboard_html())
 
 @app.get("/api/scan-modes")
 async def get_scan_modes():
     """Get information about all available scan modes"""
     return JSONResponse(content=SCAN_MODES)
+
 
 @app.post("/api/scan/local")
 async def scan_local(request: Request):
@@ -125,11 +137,12 @@ async def scan_local(request: Request):
         raise HTTPException(status_code=400, detail="No target path provided")
     
     try:
-        # Use the ACTUAL working analyzer
+        # Use the ACTUAL working analyzer with profile support
         analyzer = ComprehensiveMCPAnalyzer(
             verbose=True,
             deep_scan=not data.get('quick_mode', False),
-            enable_llm=data.get('enable_llm', False)
+            enable_llm=data.get('enable_llm', False),
+            profile=data.get('profile', 'production')  # Add profile support
         )
         
         # This handles both files and directories!
@@ -150,7 +163,7 @@ async def scan_local(request: Request):
             db.store_threat(
                 run_id=run_id,
                 attack_vector=str(threat.attack_vector),
-                severity=threat.severity,
+                severity=str(threat.severity),  # Convert enum to string
                 confidence=threat.confidence,
                 file_path=threat.file_path,
                 line_numbers=threat.line_numbers,
@@ -243,11 +256,12 @@ async def scan_github_repo(request: Request):
         raise HTTPException(status_code=400, detail="Invalid GitHub URL")
     
     try:
-        # Use the ACTUAL working analyzer that handles GitHub properly!
+        # Use the ACTUAL working analyzer that handles GitHub properly with profile support!
         analyzer = ComprehensiveMCPAnalyzer(
             verbose=True,
             deep_scan=not data.get('quick_mode', False),
-            enable_llm=data.get('enable_llm', False)
+            enable_llm=data.get('enable_llm', False),
+            profile=data.get('profile', 'production')  # Add profile support
         )
         
         # This already handles GitHub cloning and everything!
@@ -280,7 +294,7 @@ async def scan_github_repo(request: Request):
             db.store_threat(
                 run_id=run_id,
                 attack_vector=str(threat.attack_vector),
-                severity=threat.severity,
+                severity=str(threat.severity),  # Convert enum to string
                 confidence=threat.confidence,
                 file_path=threat.file_path,
                 line_numbers=threat.line_numbers,
@@ -829,9 +843,9 @@ def get_dashboard_html():
             </div>
         </div>
         <div class="nav-tabs">
-            <button class="nav-tab active" onclick="switchTab('scanner')">🔍 Scanner</button>
-            <button class="nav-tab" onclick="switchTab('learning')">📚 Learning Center</button>
-            <button class="nav-tab" onclick="switchTab('history')">📊 Scan History</button>
+            <button class="nav-tab active" onclick="switchTab('scanner', event)">🔍 Scanner</button>
+            <button class="nav-tab" onclick="switchTab('learning', event)">📚 Learning Center</button>
+            <button class="nav-tab" onclick="switchTab('history', event)">📊 Scan History</button>
         </div>
         <div class="content">
             <div id="scanner" class="tab-content active">
@@ -940,29 +954,29 @@ def get_dashboard_html():
         </div>
     </div>
     <script>
-        // Define variables and functions in global scope
-        window.selectedScanMode = null;
-        window.scanModes = {};
+        // Define ALL functions directly in global scope for onclick handlers
+        var selectedScanMode = null;
+        var scanModes = {};
 
-        window.initDashboard = async function() {
-            await loadScanModes();
-            await loadStats();
+        function initDashboard() {
+            loadScanModes();
+            loadStats();
         }
 
-        window.loadScanModes = async function() {
+        async function loadScanModes() {
             try {
                 const response = await fetch('/api/scan-modes');
-                window.scanModes = await response.json();
+                scanModes = await response.json();
                 renderScanModes();
             } catch (error) {
                 console.error('Failed to load scan modes:', error);
             }
         }
 
-        window.renderScanModes = function() {
+        function renderScanModes() {
             const grid = document.getElementById('scanModesGrid');
             grid.innerHTML = '';
-            Object.entries(window.scanModes).forEach(([key, mode]) => {
+            Object.entries(scanModes).forEach(([key, mode]) => {
                 const card = document.createElement('div');
                 card.className = 'scan-mode-card';
                 card.onclick = () => selectScanMode(key, card);
@@ -984,16 +998,16 @@ def get_dashboard_html():
             });
         }
 
-        window.selectScanMode = function(mode, card) {
-            window.selectedScanMode = mode;
+        function selectScanMode(mode, card) {
+            selectedScanMode = mode;
             document.querySelectorAll('.scan-mode-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
         }
 
-        window.startScan = async function() {
+        async function startScan() {
             const target = document.getElementById('scanTarget').value;
             if (!target) { alert('Please enter a target to scan'); return; }
-            if (!window.selectedScanMode) { alert('Please select a scan mode'); return; }
+            if (!selectedScanMode) { alert('Please select a scan mode'); return; }
 
             document.getElementById('scanProgress').style.display = 'block';
             updateProgress(0);
@@ -1002,7 +1016,7 @@ def get_dashboard_html():
                 let endpoint = '';
                 const requestBody = {};
 
-                switch(window.selectedScanMode) {
+                switch(selectedScanMode) {
                     case 'local_scan':
                         endpoint = '/api/scan/local';
                         requestBody.target_path = target;
@@ -1054,13 +1068,13 @@ def get_dashboard_html():
             }
         }
 
-        window.updateProgress = function(percent) {
+        function updateProgress(percent) {
             const fill = document.getElementById('progressFill');
             fill.style.width = percent + '%';
             fill.textContent = percent + '%';
         }
 
-        window.displayScanResults = function(results) {
+        function displayScanResults(results) {
             const container = document.getElementById('scanResults');
             container.classList.add('show');
             
@@ -1138,7 +1152,7 @@ def get_dashboard_html():
             loadStats();
         }
         
-        window.getThreatlevel = function(score) {
+        function getThreatlevel(score) {
             if (score >= 80) return 'CRITICAL';
             if (score >= 60) return 'HIGH';
             if (score >= 40) return 'MEDIUM';
@@ -1146,7 +1160,7 @@ def get_dashboard_html():
             return 'SAFE';
         }
         
-        window.getScoreExplanation = function(score) {
+        function getScoreExplanation(score) {
             if (score >= 80) return '⛔ CRITICAL RISK: Do not use this tool. Multiple severe vulnerabilities detected that could compromise your system.';
             if (score >= 60) return '🚨 HIGH RISK: Significant security issues found. Use only in isolated environments with extreme caution.';
             if (score >= 40) return '⚠️ MEDIUM RISK: Some concerning patterns detected. Review threats carefully before proceeding.';
@@ -1154,7 +1168,7 @@ def get_dashboard_html():
             return '✅ SAFE: No significant security issues detected. This tool appears safe to use.';
         }
 
-        window.loadStats = async function() {
+        async function loadStats() {
             try {
                 const response = await fetch('/api/stats');
                 const stats = await response.json();
@@ -1205,7 +1219,7 @@ def get_dashboard_html():
             }
         }
         
-        window.viewScanDetails = async function(runId) {
+        async function viewScanDetails(runId) {
             try {
                 // Try to get from session storage first
                 let scanData = sessionStorage.getItem(`scan_${runId}`);
@@ -1223,7 +1237,7 @@ def get_dashboard_html():
             }
         }
         
-        window.showDetailModal = function(data) {
+        function showDetailModal(data) {
             const modal = document.getElementById('detailModal');
             const modalBody = document.getElementById('modalBody');
             const threatLevel = getThreatlevel(data.threat_score || 0);
@@ -1343,11 +1357,11 @@ def get_dashboard_html():
             modal.classList.add('show');
         }
         
-        window.closeModal = function() {
+        function closeModal() {
             document.getElementById('detailModal').classList.remove('show');
         }
         
-        window.exportReport = function(runId) {
+        function exportReport(runId) {
             // Get the scan data
             let scanData = sessionStorage.getItem(`scan_${runId}`);
             if (!scanData) {
@@ -1361,7 +1375,7 @@ def get_dashboard_html():
             }
         }
         
-        window.downloadJSON = function(data, filename) {
+        function downloadJSON(data, filename) {
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1373,15 +1387,20 @@ def get_dashboard_html():
             URL.revokeObjectURL(url);
         }
 
-        window.switchTab = function(tabName) {
+        function switchTab(tabName, evt) {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
+            if (evt && evt.target) {
+                evt.target.classList.add('active');
+            } else {
+                // Fallback - find the tab by name
+                document.querySelector(`[onclick*="${tabName}"]`).classList.add('active');
+            }
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
         }
 
-        window.runQuickScan = function() {
-            window.selectedScanMode = 'config_discovery';
+        function runQuickScan() {
+            selectedScanMode = 'config_discovery';
             document.getElementById('scanTarget').value = 'auto';
             startScan();
         }

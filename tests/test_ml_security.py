@@ -20,11 +20,11 @@ async def test_security_detection():
     
     # Import our security analyzers
     try:
-        from src.ml.comprehensive_analyzer import ComprehensiveSecurityAnalyzer
-        analyzer = ComprehensiveSecurityAnalyzer()
-        print("✅ ML Security Analyzer loaded successfully")
+        from src.semantics.semantic_security_analyzer import SemanticSecurityAnalyzer
+        analyzer = SemanticSecurityAnalyzer()
+        print("✅ Semantic Security Analyzer loaded successfully")
     except ImportError:
-        print("⚠️  ML analyzer not available - using pattern detection")
+        print("⚠️  Semantic analyzer not available - using pattern detection")
         analyzer = None
     
     # Test detection on various threat patterns

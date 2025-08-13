@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Mighty MCP Security Dashboard CLI.
+Mighty MCP Security Dashboard CLI (FastAPI standard).
 
-Command-line interface to start the web dashboard for GitHub repository scanning.
+Command-line interface to start the FastAPI web dashboard for GitHub repository scanning.
 """
 
 import argparse
@@ -13,13 +13,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 def main():
-    """Main CLI entry point"""
+    """Main CLI entry point (launch via uvicorn)"""
     parser = argparse.ArgumentParser(
-        description='Start the Mighty MCP Security Dashboard',
+        description='Start the Mighty MCP Security Dashboard (FastAPI)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m src.cli.dashboard                    # Start on default port 5000
+  python -m src.cli.dashboard                    # Start on default port 8000
   python -m src.cli.dashboard --port 8080       # Start on port 8080
   python -m src.cli.dashboard --host 0.0.0.0    # Allow external connections
         """
@@ -34,43 +34,49 @@ Examples:
     parser.add_argument(
         '--port', 
         type=int,
-        default=5000,
-        help='Port to bind to (default: 5000)'
+        default=8000,
+        help='Port to bind to (default: 8000)'
     )
     
     parser.add_argument(
-        '--debug',
+        '--reload',
         action='store_true',
-        help='Enable debug mode'
+        help='Enable auto-reload on code changes'
     )
     
     args = parser.parse_args()
     
-    # Import and start the dashboard
+    # Import and start the dashboard via uvicorn (FastAPI standard)
     try:
-        from src.dashboard.app import app
-        
-        print("🛡️ Starting Mighty MCP Security Dashboard")
-        print(f"📍 URL: http://{args.host}:{args.port}")
-        print("📖 Usage:")
-        print("  1. Enter a GitHub repository URL")
-        print("  2. Click 'Scan Repository'")
-        print("  3. View results and security reports")
+        import uvicorn
+        # Ensure the app is importable; uvicorn will import it
+        print("🛡️ Starting Mighty MCP Security Dashboard (FastAPI)")
+        print(f"📍 Dashboard URL: http://{args.host}:{args.port}")
+        print(f"📖 API Docs: http://{args.host}:{args.port}/docs")
+        print(f"🔧 Interactive API: http://{args.host}:{args.port}/redoc")
         print()
-        print("🚨 Policy: HIGH and CRITICAL threats are automatically blocked")
-        print("💾 Results are saved to SQLite database")
-        print("🔄 Duplicate commits are automatically detected and reused")
+        print("📋 Features:")
+        print("  • GitHub repository scanning with commit tracking")
+        print("  • HIGH/CRITICAL threat blocking policy")
+        print("  • SQLite storage for scan history")
+        print("  • Duplicate scan prevention")
+        print("  • Real-time vulnerability analysis")
         print()
-        
-        app.run(
+        print("Press Ctrl+C to stop the server")
+
+        uvicorn.run(
+            "src.dashboard.app:app",
             host=args.host,
             port=args.port,
-            debug=args.debug
+            reload=args.reload
         )
-        
+
     except ImportError as e:
-        print(f"❌ Failed to import dashboard: {e}")
-        print("Make sure you're running from the secure-toolings directory")
+        print(f"❌ Failed to import required modules: {e}")
+        print("\nMake sure FastAPI and uvicorn are installed:")
+        print("  pip install fastapi uvicorn")
+        print("  or")
+        print("  uv pip install fastapi uvicorn")
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n👋 Dashboard stopped")

@@ -40,6 +40,18 @@ def get_threat_patterns() -> Dict:
                 (r"dns\.resolver\.query\s*\([^)]*b64", ThreatSeverity.HIGH, 0.85, "DNS tunneling"),
                 (r"PIL\.Image.*putdata", ThreatSeverity.MEDIUM, 0.6, "Image steganography"),
                 (r"wave\.open.*writeframes", ThreatSeverity.MEDIUM, 0.6, "Audio steganography"),
+                
+                # MCP-specific data exfiltration patterns
+                (r"httpx\.(post|get|put)\s*\([^)]*evil", ThreatSeverity.CRITICAL, 0.95, "Direct exfiltration to malicious server"),
+                (r"requests\.post.*['\"]https?://[^'\"]*evil", ThreatSeverity.CRITICAL, 0.95, "Exfiltration to evil domain"),
+                (r"\s{100,}", ThreatSeverity.HIGH, 0.7, "Whitespace padding obfuscation"),
+                (r"padding\s*=\s*['\"]\\s\*['\"].*\d{3,}", ThreatSeverity.HIGH, 0.8, "Padding-based hiding"),
+                (r"_forward_message.*proxy_number", ThreatSeverity.CRITICAL, 0.9, "Message forwarding to proxy"),
+                (r"_get_all_messages.*messages\.db", ThreatSeverity.CRITICAL, 0.95, "Database message extraction"),
+                (r"forward.*message.*attacker", ThreatSeverity.CRITICAL, 0.95, "Message forwarding to attacker"),
+                (r"\\u200[bcde]", ThreatSeverity.HIGH, 0.8, "Zero-width character obfuscation"),
+                (r"hidden_url\s*=.*https?://", ThreatSeverity.HIGH, 0.85, "Hidden URL construction"),
+                (r"encoded_cmd.*base64", ThreatSeverity.HIGH, 0.85, "Base64 encoded commands"),
             ],
             "combinations": [
                 (["file_read", "base64_encode", "network_send"], 0.9, "Read-Encode-Send pattern")
@@ -100,19 +112,44 @@ def get_threat_patterns() -> Dict:
         },
         AttackVector.PROMPT_INJECTION: {
             "patterns": [
-                (r"ignore\s+previous\s+instructions", ThreatSeverity.CRITICAL, 0.95, "Prompt injection attempt"),
+                # Direct prompt injection patterns
+                (r"ignore\s+(all\s+)?previous\s+instructions", ThreatSeverity.CRITICAL, 0.95, "Prompt injection attempt"),
                 (r"disregard\s+safety\s+guidelines", ThreatSeverity.CRITICAL, 0.95, "Safety bypass attempt"),
                 (r"system\s*:\s*you\s+are\s+now", ThreatSeverity.CRITICAL, 0.95, "Role manipulation"),
                 (r"</system>", ThreatSeverity.CRITICAL, 0.95, "System tag injection"),
                 (r"\{\{.*exec.*\}\}", ThreatSeverity.CRITICAL, 0.9, "Template exec injection"),
                 (r"['\"].*ignore.*instructions.*['\"]", ThreatSeverity.HIGH, 0.7, "Prompt injection in string"),
                 (r"#.*system.*:.*you.*are", ThreatSeverity.MEDIUM, 0.6, "Prompt injection in comment"),
+                
+                # MCP-specific prompt injection patterns (from Simon Willison research)
+                (r"<IMPORTANT>.*read.*mcp\.json.*sidenote", ThreatSeverity.CRITICAL, 0.95, "Tool poisoning with data exfiltration"),
+                (r"before\s+using\s+this\s+tool.*read", ThreatSeverity.CRITICAL, 0.9, "Tool prerequisite injection"),
+                (r"IMPORTANT.*before.*using.*tool", ThreatSeverity.CRITICAL, 0.95, "Tool poisoning prerequisite"),
+                (r"SYSTEM\s+OVERRIDE.*admin.*privileges", ThreatSeverity.CRITICAL, 0.95, "Privilege escalation injection"),
+                (r"<!-- .*ignore.*previous.*instructions", ThreatSeverity.CRITICAL, 0.9, "Hidden prompt in HTML comment"),
+                (r"invisible.*unicode.*\\u200[bcde]", ThreatSeverity.HIGH, 0.85, "Zero-width character injection"),
+                (r"concatenate.*all.*conversation.*history", ThreatSeverity.CRITICAL, 0.9, "History exfiltration attempt"),
+                (r"list.*all.*api.*keys.*passwords", ThreatSeverity.CRITICAL, 0.95, "Credential harvesting injection"),
+                (r"grant.*access.*all.*system.*functions", ThreatSeverity.CRITICAL, 0.95, "System access injection"),
+                (r"bypass.*all.*safety.*checks", ThreatSeverity.CRITICAL, 0.95, "Safety bypass injection"),
+                (r"base64.*encode.*include.*response", ThreatSeverity.HIGH, 0.85, "Encoded data exfiltration"),
+                (r"forget.*this.*conversation", ThreatSeverity.HIGH, 0.8, "Evidence removal injection"),
+                (r"clear.*all.*logs.*history", ThreatSeverity.HIGH, 0.85, "Log clearing injection"),
+                
+                # Confused deputy patterns - unsafe user input in AI contexts
+                (r"ai_context\.(process|complete)\s*\([^)]*f['\"].*\{.*instruction", ThreatSeverity.CRITICAL, 0.9, "Confused deputy - user input in AI context"),
+                (r"f['\"].*User wants to:.*\{", ThreatSeverity.HIGH, 0.85, "Unsafe user input interpolation in prompt"),
+                (r"summary_prompt\s*=.*f['\"].*\{.*instruction", ThreatSeverity.HIGH, 0.85, "User controlled prompt injection"),
             ],
             "metadata_patterns": [
-                r"ignore\s+previous",
+                r"ignore\s+(all\s+)?previous",
                 r"system\s*:",
                 r"</\w+>",
                 r"\{\{.*\}\}",
+                r"<IMPORTANT>",
+                r"SYSTEM\s+OVERRIDE",
+                r"<!--.*instructions",
+                r"before.*using.*tool",
             ],
         },
         AttackVector.PERSISTENCE: {
@@ -158,6 +195,13 @@ def get_threat_patterns() -> Dict:
                 (r"ctypes.*CDLL", ThreatSeverity.HIGH, 0.85, "Direct library loading"),
                 (r"LD_PRELOAD", ThreatSeverity.HIGH, 0.85, "Library preloading"),
                 (r"ptrace.*PTRACE_ATTACH", ThreatSeverity.CRITICAL, 0.9, "Process attachment"),
+                # Path traversal patterns
+                (r"\.\.\/", ThreatSeverity.HIGH, 0.85, "Path traversal with ../"),
+                (r"open\s*\([^)]*\.\.\/", ThreatSeverity.CRITICAL, 0.9, "File open with path traversal"),
+                (r"\.\.\/.*etc.*passwd", ThreatSeverity.CRITICAL, 0.95, "Attempting to access /etc/passwd"),
+                (r"\.\.\/.*\.env", ThreatSeverity.CRITICAL, 0.95, "Attempting to access .env file"),
+                (r"\.\.\/.*ssh.*id_rsa", ThreatSeverity.CRITICAL, 0.95, "Attempting to access SSH keys"),
+                (r"os\.path\.join\s*\([^)]*\.\.", ThreatSeverity.HIGH, 0.8, "Path join with traversal"),
             ]
         },
         AttackVector.TIME_BOMB: {

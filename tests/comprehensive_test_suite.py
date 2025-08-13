@@ -535,13 +535,21 @@ def validate_json_schema(json_data: str, schema: dict):
         
         # Import analyzers
         try:
-            from analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+            from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
         except ImportError as e:
             print(f"Error importing analyzers: {e}")
             return results
         
         # Create analyzer with deep scan enabled
-        analyzer = ComprehensiveMCPAnalyzer(verbose=False, deep_scan=True, enable_llm=False)
+        # Disable caching and filtering for test cases
+        analyzer = ComprehensiveMCPAnalyzer(
+            verbose=False, 
+            deep_scan=True, 
+            enable_llm=False, 
+            use_cache=False  # Disable cache for fresh scans
+        )
+        # Force disable smart filter for test evaluation (test files should be scanned)
+        analyzer.smart_filter = None
         
         # Test each case
         for example in self.test_cases:

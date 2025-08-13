@@ -710,7 +710,7 @@ class AnalysisCacheDB:
         cursor = self.conn.cursor()
         
         cursor.execute("""
-            INSERT INTO analysis_runs (
+            INSERT OR REPLACE INTO analysis_runs (
                 run_id, repo_url, commit_sha, branch, scan_timestamp, scan_type,
                 llm_enabled, threat_level, threat_score, confidence, total_files,
                 total_threats, critical_threats, sha512_fingerprint, sha3_512_fingerprint,
@@ -751,11 +751,11 @@ class AnalysisCacheDB:
         
         cursor.execute("""
             INSERT INTO threats (
-                threat_id, run_id, attack_vector, severity, confidence,
+                run_id, attack_vector, severity, confidence,
                 file_path, line_numbers, description, evidence
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            str(uuid.uuid4()), run_id, attack_vector, severity, confidence,
+            run_id, attack_vector, severity, confidence,
             file_path, json.dumps(line_numbers) if line_numbers else '[]',
             description, json.dumps(evidence) if evidence else '[]'
         ))

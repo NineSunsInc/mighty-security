@@ -190,38 +190,28 @@ class GatewayInjector:
     def _wrap_stdio_server(self, name: str, server: Dict, options: Dict) -> Dict:
         """Wrap stdio transport server"""
         
-        # Create wrapper command
-        wrapped = {
-            'command': 'python',
-            'args': [
-                '-m', 'secure_toolings.runtime.wrapper',
-                '--mode', 'stdio',
-                '--proxy-url', self.proxy_url,
-                '--server-name', name
-            ]
-        }
+        # For now, we'll modify the environment to include proxy info
+        # The actual interception will happen at the proxy level
+        # This is simpler than creating a separate wrapper module
         
-        # Add options
-        if options.get('strict'):
-            wrapped['args'].extend(['--strict'])
+        wrapped = server.copy()
         
-        # Add original command
-        wrapped['args'].extend(['--exec', server['command']])
-        if 'args' in server:
-            wrapped['args'].extend(server['args'])
-        
-        # Preserve environment
-        if 'env' in server:
-            wrapped['env'] = {
-                **server['env'],
-                'SECURE_MCP_ORIGINAL_ENV': json.dumps(server['env'])
-            }
-        
-        wrapped['env'] = wrapped.get('env', {})
+        # Add proxy environment variables
+        wrapped['env'] = wrapped.get('env', {}).copy()
         wrapped['env'].update({
             'SECURE_MCP_PROXY_URL': self.proxy_url,
-            'SECURE_MCP_SERVER_NAME': name
+            'SECURE_MCP_SERVER_NAME': name,
+            'SECURE_MCP_WRAPPED': 'true',
+            'SECURE_MCP_ORIGINAL_COMMAND': server.get('command', ''),
+            'SECURE_MCP_STRICT': str(options.get('strict', False))
         })
+        
+        # Store original config for unwrapping
+        if 'args' in server:
+            wrapped['env']['SECURE_MCP_ORIGINAL_ARGS'] = json.dumps(server['args'])
+        
+        # Add a marker to identify wrapped servers
+        wrapped['__secure_mcp_wrapped__'] = True
         
         return wrapped
     
@@ -278,30 +268,27 @@ class GatewayInjector:
     async def _unwrap_server(self, server: Dict) -> Dict:
         """Unwrap a wrapped server configuration"""
         
-        # For stdio servers
-        if server.get('command') == 'python':
-            args = server.get('args', [])
-            if '-m' in args and 'secure_toolings.runtime.wrapper' in args:
-                # Extract original command
-                try:
-                    exec_index = args.index('--exec')
-                    original_command = args[exec_index + 1]
-                    original_args = args[exec_index + 2:]
-                    
-                    unwrapped = {'command': original_command}
-                    if original_args:
-                        unwrapped['args'] = original_args
-                    
-                    # Restore original env if saved
-                    if 'env' in server:
-                        env = server['env'].copy()
-                        if 'SECURE_MCP_ORIGINAL_ENV' in env:
-                            original_env = json.loads(env['SECURE_MCP_ORIGINAL_ENV'])
-                            unwrapped['env'] = original_env
-                    
-                    return unwrapped
-                except:
-                    pass
+        # Check for our wrapper marker
+        if server.get('__secure_mcp_wrapped__'):
+            unwrapped = server.copy()
+            
+            # Remove wrapper marker
+            del unwrapped['__secure_mcp_wrapped__']
+            
+            # Clean environment variables
+            if 'env' in unwrapped:
+                env = unwrapped['env'].copy()
+                # Remove our injected variables
+                for key in list(env.keys()):
+                    if key.startswith('SECURE_MCP_'):
+                        del env[key]
+                
+                if env:
+                    unwrapped['env'] = env
+                else:
+                    del unwrapped['env']
+            
+            return unwrapped
         
         # For HTTP/SSE servers
         if 'headers' in server:
@@ -332,11 +319,14 @@ class GatewayInjector:
     def _is_wrapped(self, server: Dict) -> bool:
         """Check if server is already wrapped"""
         
-        # Check stdio wrapping
-        if server.get('command') == 'python':
-            args = server.get('args', [])
-            if 'secure_toolings.runtime.wrapper' in ' '.join(map(str, args)):
-                return True
+        # Check for our wrapper marker
+        if server.get('__secure_mcp_wrapped__'):
+            return True
+        
+        # Check environment variables for stdio servers
+        env = server.get('env', {})
+        if 'SECURE_MCP_WRAPPED' in env:
+            return True
         
         # Check HTTP/SSE wrapping
         url = server.get('url', '')

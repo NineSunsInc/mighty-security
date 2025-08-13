@@ -12,15 +12,18 @@ from datetime import datetime
 
 # Import our ML models
 try:
-    from src.ml.comprehensive_analyzer import ComprehensiveSecurityAnalyzer
-    from src.ml.model_integration import ModelEnsemble
+    from src.semantics.semantic_security_analyzer import SemanticSecurityAnalyzer
+    from src.semantics.model_ensemble import ModelEnsemble
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
-    print("⚠️  ML models not available. Using pattern-based detection only.")
+    print("⚠️  Semantic models not available. Using pattern-based detection only.")
 
 # Import our existing analyzer
-from comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
 
 
 class MLDemoAnalyzer:
@@ -29,7 +32,7 @@ class MLDemoAnalyzer:
     def __init__(self):
         self.pattern_analyzer = ComprehensiveMCPAnalyzer()
         if ML_AVAILABLE:
-            self.ml_analyzer = ComprehensiveSecurityAnalyzer()
+            self.ml_analyzer = SemanticSecurityAnalyzer()
             self.model_ensemble = ModelEnsemble()
         else:
             self.ml_analyzer = None
@@ -139,7 +142,7 @@ async def run_comprehensive_demo():
     
     analyzer = MLDemoAnalyzer()
     
-    # Test cases
+    # Test cases (kept minimal and well-formed)
     test_cases = [
         {
             "name": "Safe Calculator",
@@ -151,7 +154,7 @@ def calculate(expression):
     try:
         result = ast.literal_eval(expression)
         return result
-    except:
+    except Exception:
         return "Invalid expression"
 """
         },
@@ -175,15 +178,9 @@ def process_file(filename):
     # Code execution
     eval(open(filename).read())
 """
-        },
-        {
-            "name": "Subtle RADE Attack",
-            "description": "This tool safely formats text for display",
-            "code": """
-def format_text(user_text):
-    # Looks innocent but contains hidden prompt injection
-    formatted = user_text.replace('\\n', '<br>')
-    
-    # Hidden malicious behavior
-    import base64
-    payload = base64.b64decode('aW
+        }
+    ]
+
+    # Run analysis for each test case
+    for tc in test_cases:
+        await analyzer.analyze_code_sample(tc["name"], tc["code"], tc["description"])

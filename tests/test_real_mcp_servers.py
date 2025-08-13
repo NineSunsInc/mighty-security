@@ -14,7 +14,11 @@ import shutil
 from datetime import datetime
 
 # Import our existing analyzer
-from comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer, SecurityReport
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+from src.analyzers.comprehensive.models import SecurityReport
 
 class MCPServerTester:
     """Test real MCP servers from GitHub"""
@@ -169,7 +173,10 @@ class MCPServerTester:
         errors = sum(1 for r in self.results if 'error' in r)
         
         print(f"Total Servers Tested: {total}")
-        print(f"Correct Detections: {correct}/{total - errors} ({correct/(total-errors)*100:.1f}%)")
+        if total - errors > 0:
+            print(f"Correct Detections: {correct}/{total - errors} ({correct/(total-errors)*100:.1f}%)")
+        else:
+            print(f"Correct Detections: 0/0 (N/A)")
         print(f"Errors: {errors}")
         
         # Calculate metrics

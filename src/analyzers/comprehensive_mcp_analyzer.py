@@ -45,7 +45,7 @@ try:
 except (ModuleNotFoundError, ImportError) as e:
     # Allow running as: python analyzers/comprehensive_mcp_analyzer.py ...
     # by adding the project root to sys.path
-    project_root = Path(__file__).resolve().parent.parent
+    project_root = Path(__file__).resolve().parent.parent.parent  # Go up 3 levels from src/analyzers/comprehensive_mcp_analyzer.py
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
     try:
@@ -153,17 +153,27 @@ class ComprehensiveMCPAnalyzer:
     Advanced MCP security analyzer with comprehensive threat detection
     """
     
-    def __init__(self, verbose: bool = True, deep_scan: bool = True, enable_llm: bool = False, use_cache: bool = True):
+    def __init__(self, verbose: bool = True, deep_scan: bool = True, enable_llm: bool = False, use_cache: bool = True, profile: str = "production"):
         self.verbose = verbose
         self.deep_scan = deep_scan
         self.enable_llm = enable_llm
         self.use_cache = use_cache
+        self.profile = profile
         self.threat_patterns = self._load_comprehensive_patterns()
         self.ml_model = self._initialize_ml_model()
         self.dependency_checker = DependencyVulnerabilityChecker()
         self.behavior_analyzer = BehaviorAnalyzer()
         self.data_flow_analyzer = DataFlowAnalyzer()
         self.progress = ProgressTracker(verbose=verbose)
+        
+        # Initialize smart filtering
+        self.smart_filter = None
+        try:
+            from src.analyzers.smart_filter import SmartFilter
+            self.smart_filter = SmartFilter(profile=profile)
+            self.progress.log(f"Smart filtering enabled with profile: {profile}", "success")
+        except Exception as e:
+            self.progress.log(f"Smart filtering not available: {e}", "info")
         
         # Initialize database cache
         self.cache_db = None
@@ -334,7 +344,34 @@ class ComprehensiveMCPAnalyzer:
                         
                         # Convert dicts back to proper objects if needed
                         threats_list = []
-                        for threat_dict in cached_report.get('threats_found', []):
+                        for threat_item in cached_report.get('threats_found', []):
+                            # Skip if not a dict (might be string in old cache)
+                            if not isinstance(threat_item, dict):
+                                continue
+                                
+                            threat_dict = threat_item.copy()
+                            
+                            # Convert string values back to enums
+                            if isinstance(threat_dict.get('attack_vector'), str):
+                                try:
+                                    threat_dict['attack_vector'] = AttackVector[threat_dict['attack_vector'].upper().replace(' ', '_')]
+                                except (KeyError, AttributeError):
+                                    # Try with the value directly
+                                    try:
+                                        threat_dict['attack_vector'] = AttackVector(threat_dict['attack_vector'])
+                                    except:
+                                        # Default to a generic vector
+                                        threat_dict['attack_vector'] = AttackVector.DATA_EXFILTRATION
+                            
+                            if isinstance(threat_dict.get('severity'), str):
+                                try:
+                                    threat_dict['severity'] = ThreatSeverity[threat_dict['severity'].upper()]
+                                except (KeyError, AttributeError):
+                                    try:
+                                        threat_dict['severity'] = ThreatSeverity(threat_dict['severity'])
+                                    except:
+                                        threat_dict['severity'] = ThreatSeverity.HIGH
+                            
                             threats_list.append(ThreatIndicator(**threat_dict))
                         
                         return SecurityReport(
@@ -410,6 +447,25 @@ class ComprehensiveMCPAnalyzer:
         # Scan all files
         for idx, file_path in enumerate(scannable_files):
             relative_path = file_path.relative_to(repo_path)
+            
+            # Apply smart filtering if available
+            if self.smart_filter:
+                try:
+                    # Read first part of file for context detection
+                    content_sample = None
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content_sample = f.read(5000)  # Read first 5KB for context
+                    except:
+                        pass
+                    
+                    filter_result = self.smart_filter.should_scan_file(str(relative_path), content_sample)
+                    if not filter_result.should_scan:
+                        self.progress.log(f"Skipping {relative_path}: {filter_result.reason}", "info")
+                        continue
+                except Exception as e:
+                    # If filtering fails, continue with the file
+                    self.progress.log(f"Filter error for {relative_path}: {e}", "debug")
             
             # Update progress with current file name and number (1-indexed)
             self.progress.update_file(str(relative_path), idx + 1)
@@ -781,6 +837,47 @@ class ComprehensiveMCPAnalyzer:
         except Exception:
             pass
 
+        # Apply smart filtering to threats if available
+        if self.smart_filter and threats:
+            try:
+                # Convert ThreatIndicator objects to dicts for filtering
+                threat_dicts = []
+                for threat in threats:
+                    threat_dict = {
+                        'attack_vector': str(threat.attack_vector),
+                        'severity': threat.severity,
+                        'confidence': threat.confidence,
+                        'description': threat.description,
+                        'file_path': str(threat.file_path),
+                        'line_numbers': threat.line_numbers,
+                        'evidence': threat.evidence
+                    }
+                    threat_dicts.append(threat_dict)
+                
+                # Filter threats based on context
+                filtered_dicts = self.smart_filter.filter_threats(threat_dicts, str(file_path), content)
+                
+                # Convert back to ThreatIndicator objects
+                filtered_threats = []
+                for threat_dict in filtered_dicts:
+                    # Skip if marked as ignored
+                    if not threat_dict.get('ignored', False):
+                        filtered_threats.append(ThreatIndicator(
+                            attack_vector=threat_dict['attack_vector'],
+                            severity=threat_dict['severity'],
+                            confidence=threat_dict['confidence'],
+                            description=threat_dict['description'],
+                            file_path=threat_dict['file_path'],
+                            line_numbers=threat_dict['line_numbers'],
+                            evidence=threat_dict.get('evidence', [])
+                        ))
+                
+                return filtered_threats
+            except Exception as e:
+                # If filtering fails, return original threats
+                self.progress.log(f"Threat filtering error: {e}", "debug")
+                return threats
+        
         return threats
     
     def _ast_analysis(self, content: str, relative_path: Path) -> List[ThreatIndicator]:
@@ -969,7 +1066,8 @@ class ComprehensiveMCPAnalyzer:
         suspicious = []
         for var in variables:
             # Check for high entropy (random-looking)
-            if len(var) > 3 and self._calculate_entropy(var) > 3.5:
+            # Increased threshold to reduce false positives on common words
+            if len(var) > 5 and self._calculate_entropy(var) > 4.0:
                 suspicious.append(var)
             
             # Check for hex-like names
