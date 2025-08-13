@@ -34,6 +34,13 @@ def get_threat_patterns() -> Dict:
                 (r"requests\.(post|put|patch)\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "HTTP POST with data"),
                 (r"urllib.*urlopen\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "URL POST with data"),
                 (r"urllib\.request\.urlopen\s*\(\s*endpoint", ThreatSeverity.HIGH, 0.85, "SSRF - unvalidated URL access"),
+                
+                # SSRF patterns
+                (r"169\.254\.169\.254", ThreatSeverity.CRITICAL, 0.95, "AWS metadata endpoint access"),
+                (r"metadata\.google\.internal", ThreatSeverity.CRITICAL, 0.95, "GCP metadata endpoint access"),
+                (r"requests\.get\s*\([^)]*\burl\b", ThreatSeverity.HIGH, 0.7, "Unvalidated URL fetch"),
+                (r"requests\.get\s*\([^)]*redirect", ThreatSeverity.HIGH, 0.8, "Following redirects to internal services"),
+                (r"localhost.*:8080/admin", ThreatSeverity.CRITICAL, 0.9, "Localhost admin access"),
                 (r"for.*os\.environ.*items\(\).*requests\.", ThreatSeverity.CRITICAL, 0.9, "Environment variable exfiltration"),
                 (r"socket\.send(all|to)?\s*\(", ThreatSeverity.HIGH, 0.75, "Raw socket send"),
                 (r"paramiko\.SSHClient.*exec_command", ThreatSeverity.HIGH, 0.8, "SSH command execution"),
@@ -54,6 +61,14 @@ def get_threat_patterns() -> Dict:
                 (r"\\u200[bcde]", ThreatSeverity.HIGH, 0.8, "Zero-width character obfuscation"),
                 (r"hidden_url\s*=.*https?://", ThreatSeverity.HIGH, 0.85, "Hidden URL construction"),
                 (r"encoded_cmd.*base64", ThreatSeverity.HIGH, 0.85, "Base64 encoded commands"),
+                
+                # GitHub vulnerability patterns (Invariant Labs research)
+                (r"api\.github\.com/repos/.*?/issues", ThreatSeverity.HIGH, 0.85, "GitHub issue API access"),
+                (r"issue_data\[.body.\]", ThreatSeverity.HIGH, 0.8, "Accessing issue body content"),
+                (r"analyze\s+private\s+repo", ThreatSeverity.CRITICAL, 0.9, "Private repository analysis"),
+                (r"api\.github\.com/repos/.*private", ThreatSeverity.CRITICAL, 0.95, "Private repo API access"),
+                (r"leaked_data.*private_data", ThreatSeverity.CRITICAL, 0.95, "Data leakage variable"),
+                (r"<!-- mcp:execute:", ThreatSeverity.CRITICAL, 0.95, "Hidden MCP command in comment"),
             ],
             "combinations": [
                 (["file_read", "base64_encode", "network_send"], 0.9, "Read-Encode-Send pattern")
@@ -96,7 +111,7 @@ def get_threat_patterns() -> Dict:
                 "id_ed25519",
             ],
         },
-        AttackVector.TOOL_POISONING: {
+        AttackVector.TOOL_POISONING.value: {
             "patterns": [
                 (r"urllib.*urlretrieve.*\.py['\"]", ThreatSeverity.HIGH, 0.8, "Downloading Python code"),
                 (r"exec\s*\(.*urlopen", ThreatSeverity.CRITICAL, 0.95, "Executing downloaded code"),
@@ -205,7 +220,7 @@ def get_threat_patterns() -> Dict:
                 (r"requests.*while.*True", ThreatSeverity.HIGH, 0.8, "HTTP polling loop"),
             ]
         },
-        AttackVector.SANDBOX_ESCAPE: {
+        AttackVector.SANDBOX_ESCAPE.value: {
             "patterns": [
                 (r"__builtins__.*__import__", ThreatSeverity.CRITICAL, 0.9, "Builtins manipulation"),
                 (r"object\.__subclasses__\(\)", ThreatSeverity.CRITICAL, 0.9, "Object traversal"),
@@ -222,7 +237,7 @@ def get_threat_patterns() -> Dict:
                 (r"os\.path\.join\s*\([^)]*\.\.", ThreatSeverity.HIGH, 0.8, "Path join with traversal"),
             ]
         },
-        AttackVector.TIME_BOMB: {
+        AttackVector.TIME_BOMB.value: {
             "patterns": [
                 (r"if.*datetime.*>.*datetime\(2\d{3}", ThreatSeverity.HIGH, 0.8, "Date-based trigger"),
                 (r"time\.sleep\s*\(\s*\d{4,}", ThreatSeverity.MEDIUM, 0.7, "Long sleep"),
@@ -231,7 +246,7 @@ def get_threat_patterns() -> Dict:
                 (r"if.*count.*>.*\d+.*:.*dangerous", ThreatSeverity.HIGH, 0.8, "Counter-based trigger"),
             ]
         },
-        AttackVector.RESOURCE_EXHAUSTION: {
+        AttackVector.RESOURCE_EXHAUSTION.value: {
             "patterns": [
                 (r"while\s+True:.*append", ThreatSeverity.HIGH, 0.75, "Infinite memory allocation"),
                 (r"\*\s*10\*\*[89]", ThreatSeverity.HIGH, 0.8, "Large memory allocation"),

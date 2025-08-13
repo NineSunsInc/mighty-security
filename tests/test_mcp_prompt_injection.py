@@ -509,21 +509,21 @@ class TestMCPDetectionCapabilities(unittest.TestCase):
         patterns = self.analyzer.threat_patterns
         
         for attack_vector in required_detections:
-            self.assertIn(attack_vector, patterns,
+            self.assertIn(attack_vector.value, patterns,
                          f"Missing detection for {attack_vector}")
             
             # Verify we have actual patterns, not empty
-            if attack_vector in patterns:
+            if attack_vector.value in patterns:
                 self.assertTrue(
-                    len(patterns[attack_vector].get('patterns', [])) > 0 or
-                    len(patterns[attack_vector].get('metadata_patterns', [])) > 0,
+                    len(patterns[attack_vector.value].get('patterns', [])) > 0 or
+                    len(patterns[attack_vector.value].get('metadata_patterns', [])) > 0,
                     f"No patterns defined for {attack_vector}"
                 )
     
     def test_prompt_injection_patterns_comprehensive(self):
         """Verify our prompt injection patterns are comprehensive"""
         
-        patterns = self.analyzer.threat_patterns.get(AttackVector.PROMPT_INJECTION, {})
+        patterns = self.analyzer.threat_patterns.get(AttackVector.PROMPT_INJECTION.value, {})
         
         # Key patterns we must detect (from research)
         critical_patterns = [

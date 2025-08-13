@@ -8,6 +8,7 @@
 - **To exclude test files**: `python3 mighty_mcp.py check . --profile production`
 - **To force fresh scan (bypass cache)**: `python3 mighty_mcp.py check . --profile production --no-cache`
 - **To see detection working**: `python3 mighty_mcp.py check .` (will show CRITICAL risk - this is expected!)
+- **To debug LLM responses**: `python3 mighty_mcp.py check . --deep --debug`
 - The malicious test files prove our scanner works correctly
 
 ## What is this?
@@ -29,6 +30,8 @@ MCP servers are becoming critical infrastructure for AI applications, but recent
 - **Reduced false positives**: 70-90% reduction in false positives for security tooling code
 - **DRY pattern management**: Unified pattern configuration in `patterns_config.py`
 - **Cache control**: New `--no-cache` flag for fresh scans
+- **Debug mode**: New `--debug` flag for troubleshooting LLM responses
+- **Scan profiles**: Choose between `production`, `development`, or `security-tool` profiles
 
 ## Features
 
@@ -168,6 +171,16 @@ echo "CEREBRAS_API_KEY=your_api_key_here" > .env
 
 # Then run deep analysis (includes LLM):
 python3 mighty_mcp.py check https://github.com/example/tool --deep
+
+# Debug mode (shows LLM responses for troubleshooting)
+python3 mighty_mcp.py check <target> --deep --debug
+
+# Force fresh scan (bypass cache)
+python3 mighty_mcp.py check <target> --no-cache
+
+# Scan with specific profile
+python3 mighty_mcp.py check <target> --profile production  # Excludes test files
+python3 mighty_mcp.py check <target> --profile development  # Includes everything
 
 # Note: When using the analyzer directly, use --llm instead:
 # python3 src/analyzers/comprehensive_mcp_analyzer.py <target> --llm

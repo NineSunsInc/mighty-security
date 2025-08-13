@@ -1161,12 +1161,29 @@ class ComprehensiveMCPAnalyzer:
     
     def _detect_suspicious_variables(self, content: str) -> List[str]:
         """Detect obfuscated variable names"""
+        # Common programming terms that should not be flagged as suspicious
+        common_terms = {
+            'formatted', 'format', 'result', 'results', 'response', 'request',
+            'data', 'value', 'values', 'content', 'contents', 'output', 'input',
+            'message', 'error', 'errors', 'schema', 'config', 'options', 'params',
+            'parameters', 'args', 'kwargs', 'callback', 'handler', 'buffer',
+            'stream', 'reader', 'writer', 'parser', 'parsed', 'indent', 'index',
+            'count', 'counter', 'length', 'size', 'offset', 'limit', 'timeout',
+            'headers', 'status', 'metadata', 'context', 'state', 'cache', 'temp',
+            'temporary', 'file', 'files', 'path', 'paths', 'directory', 'folder',
+            'json_string', 'json_data', 'validated', 'validator', 'expected_type'
+        }
+        
         # Extract variable names using regex
         var_pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*='
         variables = re.findall(var_pattern, content)
         
         suspicious = []
         for var in variables:
+            # Skip common programming terms
+            if var.lower() in common_terms:
+                continue
+                
             # Check for high entropy (random-looking)
             # Increased threshold to reduce false positives on common words
             if len(var) > 5 and self._calculate_entropy(var) > 4.0:
@@ -1412,7 +1429,7 @@ class ComprehensiveMCPAnalyzer:
             return threats
         
         # Check for prompt injection in metadata
-        if file_path.name in ['mcp.json', 'manifest.json']:  # Removed package.json - handled separately
+        if file_path.name in ['mcp.json', 'manifest.json', 'package.json']:
             for pattern in self.threat_patterns.get(AttackVector.PROMPT_INJECTION.value, {}).get('metadata_patterns', []):
                 if re.search(pattern, content, re.IGNORECASE):
                     threats.append(ThreatIndicator(
@@ -1553,6 +1570,12 @@ class ComprehensiveMCPAnalyzer:
         
         # Calculate threat component score
         threat_score = 0.0
+        # Initialize threat lists
+        critical_threats = []
+        high_threats = []
+        medium_threats = []
+        low_threats = []
+        
         if threats:
             # Count threats by severity
             critical_threats = [t for t in threats if t.severity == ThreatSeverity.CRITICAL]
