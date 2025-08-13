@@ -33,6 +33,8 @@ def get_threat_patterns() -> Dict:
             "patterns": [
                 (r"requests\.(post|put|patch)\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "HTTP POST with data"),
                 (r"urllib.*urlopen\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "URL POST with data"),
+                (r"urllib\.request\.urlopen\s*\(\s*endpoint", ThreatSeverity.HIGH, 0.85, "SSRF - unvalidated URL access"),
+                (r"for.*os\.environ.*items\(\).*requests\.", ThreatSeverity.CRITICAL, 0.9, "Environment variable exfiltration"),
                 (r"socket\.send(all|to)?\s*\(", ThreatSeverity.HIGH, 0.75, "Raw socket send"),
                 (r"paramiko\.SSHClient.*exec_command", ThreatSeverity.HIGH, 0.8, "SSH command execution"),
                 (r"ftplib\.FTP.*stor[^)]*\)", ThreatSeverity.HIGH, 0.75, "FTP upload"),

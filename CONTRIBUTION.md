@@ -8,28 +8,46 @@ By contributing, you help make the MCP ecosystem safer. Please read this documen
 
 ## Quick Start (Development)
 
-- **Requirements**: Python 3.11+, Git, macOS/Linux/WSL. Optional: `uv` for dependency management.
+- **Requirements**: Python 3.11+, Git, macOS/Linux/WSL
 - **Clone**:
   ```bash
   git clone https://github.com/<your-org>/secure-toolings.git
   cd secure-toolings
   ```
-- **Install (recommended via uv)**:
+- **Install (STRONGLY recommended via uv)**:
   ```bash
-  # macOS (Homebrew)
+  # Install UV package manager
+  # macOS (Homebrew):
   brew install uv
-  uv sync -p 3.11
+  # Or via pip:
+  pip install uv
+  
+  # Install project dependencies
+  uv sync
+  
+  # ALWAYS activate the virtual environment before running commands
+  source .venv/bin/activate  # macOS/Linux
+  # or
+  .venv\Scripts\activate     # Windows
+  
+  # Verify installation
+  python3 mighty_mcp.py --help
   ```
-- **Install (pip virtualenv alternative)**:
+- **Alternative pip install** (not recommended):
   ```bash
   python3 -m venv .venv
   source .venv/bin/activate
   pip install -U pip
   pip install -e .
   ```
-- **Optional ML features** (enables advanced analysis paths used in `src/semantics/*`):
+- **Optional ML features** (enables advanced analysis):
   ```bash
+  # After activating venv
   pip install transformers torch sentence-transformers scikit-learn networkx gitpython
+  ```
+- **Enable LLM features** (optional):
+  ```bash
+  echo "CEREBRAS_API_KEY=your_api_key" > .env
   ```
 
 ## Repo Map (what to change where)
@@ -44,11 +62,29 @@ Before adding new modules or helpers, search the codebase to avoid duplication a
 
 ## Running The Analyzer & Tests
 
-- Analyze a local project or a GitHub repo:
+**IMPORTANT: Always activate the virtual environment first:**
+```bash
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
+```
+
+### Main Entry Points
+
+- **Use the unified CLI** (recommended):
   ```bash
-  python3 analyzers/comprehensive_mcp_analyzer.py .
-  python3 analyzers/comprehensive_mcp_analyzer.py https://github.com/modelcontextprotocol/servers
+  python3 mighty_mcp.py check .
+  python3 mighty_mcp.py check https://github.com/modelcontextprotocol/servers
   ```
+
+- **Direct analyzer** (alternative):
+  ```bash
+  python3 src/analyzers/comprehensive_mcp_analyzer.py .
+  python3 src/analyzers/comprehensive_mcp_analyzer.py https://github.com/modelcontextprotocol/servers
+  ```
+
+### Running Tests
+
 - Create local test cases (safe/malicious examples):
   ```bash
   python3 tests/create_test_cases.py
@@ -68,6 +104,15 @@ Before adding new modules or helpers, search the codebase to avoid duplication a
   # Or a specific URL
   python3 tests/test_real_mcp_servers.py --url https://github.com/modelcontextprotocol/servers
   ```
+
+### Web Dashboard
+
+- Start the dashboard:
+  ```bash
+  python3 src/dashboard/app.py
+  ```
+- Access at: http://localhost:8080
+- The database auto-initializes on first use (creates `analysis_cache.db`)
 
 ### About semantic analysis usage
 

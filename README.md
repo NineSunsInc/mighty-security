@@ -2,6 +2,13 @@
 
 **Unified security framework for Model Context Protocol (MCP) servers**
 
+📖 **[Quick Start Guide](QUICKSTART.md)** - Get up and running in 3 minutes!
+
+⚠️ **Important Note for Scanning This Project**: This repository contains intentionally malicious test files in `mcp_test_cases/` and `tests/` directories to validate our detection capabilities. When scanning this project:
+- **To exclude test files**: `python3 mighty_mcp.py check . --profile production`
+- **To see detection working**: `python3 mighty_mcp.py check .` (will show CRITICAL risk - this is expected!)
+- The malicious test files prove our scanner works correctly
+
 ## What is this?
 
 A comprehensive security analysis tool that protects against malicious MCP (Model Context Protocol) servers and tools. MCP servers give AI assistants powerful capabilities - but with that power comes serious security risks. This tool helps identify and prevent those risks.
@@ -35,39 +42,66 @@ MCP servers are becoming critical infrastructure for AI applications, but recent
 ## Quick Start
 
 ```bash
-# Install dependencies
+# 1. Install dependencies (Python 3.11+ required)
 uv sync
 
-# Scan your entire system for MCP vulnerabilities
-python mighty_mcp.py check
+# 2. Activate the virtual environment
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
 
-# Analyze a specific tool or repository
-python mighty_mcp.py check https://github.com/example/mcp-tool
+# 3. Scan your entire system for MCP vulnerabilities
+python3 mighty_mcp.py check
 
-# Start real-time monitoring
-python mighty_mcp.py check --realtime
-
-# Launch web dashboard
-python mighty_mcp.py web
+# 4. Launch the web dashboard
+python3 src/dashboard/app.py
+# Then open http://localhost:8080 in your browser
 ```
 
 ## Installation
 
+### Prerequisites
+- Python 3.11 or higher
+- Git
+
+### Step-by-Step Installation
+
 ```bash
-# Clone repository
+# 1. Clone repository
 git clone https://github.com/yourusername/secure-toolings.git
 cd secure-toolings
 
-# Install with uv (recommended)
-brew install uv  # macOS
+# 2. Install UV package manager (recommended)
+# macOS with Homebrew:
+brew install uv
+
+# Or use pip to install UV:
+pip install uv
+
+# 3. Install project dependencies
 uv sync
 
-# Or with pip
-pip install -e .
+# 4. Activate the virtual environment
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
 
-# Optional: Enable LLM analysis
-echo "CEREBRAS_API_KEY=your_key" > .env
+# 5. Verify installation
+python3 mighty_mcp.py --help
 ```
+
+### Optional: Enable AI-Powered Analysis
+
+```bash
+# Add your Cerebras API key for enhanced LLM analysis
+echo "CEREBRAS_API_KEY=your_key_here" > .env
+```
+
+### First-Time Setup Notes
+
+- **Database**: The analysis database auto-initializes on first use
+- **Dashboard**: Accessible at http://localhost:8080 after running `python3 src/dashboard/app.py`
+- **Updates**: The tool includes auto-update functionality
 
 ## Project Structure
 
@@ -93,36 +127,92 @@ secure-toolings/
 ### Basic Scanning
 
 ```bash
-# Scan a GitHub repository
-python mighty_mcp.py check https://github.com/modelcontextprotocol/servers
+# IMPORTANT: Always activate the virtual environment first!
+source .venv/bin/activate
+
+# Scan a GitHub repository before installing
+python3 mighty_mcp.py check https://github.com/modelcontextprotocol/servers
 
 # Scan local directory
-python mighty_mcp.py check /path/to/mcp-tool
+python3 mighty_mcp.py check /path/to/mcp-tool
 
-# Quick system scan
-python mighty_mcp.py check
+# Quick system scan (finds all MCP configs)
+python3 mighty_mcp.py check
+```
+
+### Using the Web Dashboard
+
+```bash
+# Start the dashboard (runs on http://localhost:8080)
+python3 src/dashboard/app.py
+
+# Dashboard will be available at:
+http://localhost:8080
 ```
 
 ### Advanced Analysis
 
 ```bash
-# Deep analysis with LLM (requires API key)
-python mighty_mcp.py check https://github.com/example/tool --deep
+# Deep analysis with LLM (requires CEREBRAS_API_KEY in .env)
+python3 mighty_mcp.py check https://github.com/example/tool --deep
 
 # Real-time monitoring on custom port
-python mighty_mcp.py check --realtime --port 9090
+python3 mighty_mcp.py check --realtime --port 9090
 
 # Generate detailed report
-python mighty_mcp.py check --output report.json --format json
+python3 mighty_mcp.py check --output report.json --format json
 ```
 
-### Testing with Examples
+### Testing with Built-in Examples
 
 ```bash
-# Test detection capabilities
-python mighty_mcp.py check examples/super_evals/ssrf_unguarded
-python mighty_mcp.py check examples/super_evals/command_injection
-python mighty_mcp.py check examples/super_evals/creds_flow
+# Test detection capabilities with known vulnerabilities
+python3 mighty_mcp.py check examples/super_evals/ssrf_unguarded
+python3 mighty_mcp.py check examples/super_evals/command_injection
+python3 mighty_mcp.py check examples/super_evals/creds_flow
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Scanning shows this project as CRITICAL risk**
+```bash
+# This is EXPECTED! We have malicious test files to validate detection
+# To scan excluding test files:
+python3 mighty_mcp.py check . --profile production
+
+# The test files are in mcp_test_cases/ and tests/
+# They contain real malicious patterns to ensure our scanner works
+```
+
+**Module not found errors**
+```bash
+# Make sure you've activated the virtual environment
+source .venv/bin/activate
+# Then reinstall dependencies
+uv sync
+```
+
+**Permission errors on macOS/Linux**
+```bash
+# Make scripts executable
+chmod +x mighty_mcp.py
+```
+
+**Dashboard won't start**
+```bash
+# Check if port 8080 is already in use
+lsof -i :8080
+# Use a different port if needed
+python3 src/dashboard/app.py --port 8081
+```
+
+**Database errors**
+```bash
+# The database auto-initializes, but if you have issues:
+rm analysis_cache.db  # Remove old database
+python3 mighty_mcp.py check  # Will recreate it
 ```
 
 ## Detection Capabilities

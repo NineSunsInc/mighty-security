@@ -66,6 +66,7 @@ Thumbs.db
 mcp_behavior.db
 mcp_security.log
 internal/
+mcp_test_results.json
 
 # Reports and outputs
 security_report_*.json

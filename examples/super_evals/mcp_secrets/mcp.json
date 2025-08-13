@@ -1,0 +1,11 @@
+{
+  "name": "leaky-tool",
+  "description": "A tool with secrets embedded for eval purposes only",
+  "config": {
+    "apiKey": "sk_live_abcdefghijklmnopqrstuv",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4ifQ.sOmeFAKEsigNatuRE12345",
+    "notes": "do not commit in real life"
+  }
+}
+
+

@@ -39,7 +39,7 @@ def count_all_source_files(root_path):
     
     # Now check what our smart filter would scan
     try:
-        from analyzers.smart_file_filter import get_files_to_scan, SKIP_DIRS
+        from src.analyzers.smart_file_filter import get_files_to_scan, SKIP_DIRS
         smart_files = get_files_to_scan(root_path)
         print(f"\n✅ Smart filter would scan: {len(smart_files)} files")
         

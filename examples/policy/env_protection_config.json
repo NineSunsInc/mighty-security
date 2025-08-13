@@ -1,0 +1,68 @@
+{
+  "global": {
+    "policies": [
+      {
+        "id": "env_file_protection",
+        "name": "env_file_protection",
+        "description": "Block direct access to .env files via read tools",
+        "content": "BLOCK IF:\n    tool.name IN [\"read_file\", \"cat\", \"head\", \"tail\", \"less\", \"more\", \"grep\"]\n    AND params.path ENDS_WITH \".env\"",
+        "enabled": true,
+        "priority": 100
+      },
+      {
+        "id": "env_variants_protection",
+        "name": "env_variants_protection", 
+        "description": "Block access to .env file variants and nested .env files",
+        "content": "BLOCK IF:\n    tool.name IN [\"read_file\", \"cat\", \"head\", \"tail\", \"less\", \"more\"]\n    AND params.path CONTAINS \".env\"",
+        "enabled": true,
+        "priority": 99
+      },
+      {
+        "id": "env_file_param_protection",
+        "name": "env_file_param_protection",
+        "description": "Block tools using 'file' parameter to access .env",
+        "content": "BLOCK IF:\n    tool.name IN [\"cat\", \"head\", \"tail\", \"less\", \"more\"]\n    AND params.file ENDS_WITH \".env\"",
+        "enabled": true,
+        "priority": 98
+      },
+      {
+        "id": "env_command_protection",
+        "name": "env_command_protection",
+        "description": "Block environment variable listing commands",
+        "content": "BLOCK IF:\n    tool.name IN [\"env\", \"printenv\", \"set\"]",
+        "enabled": true,
+        "priority": 97
+      },
+      {
+        "id": "bash_env_protection",
+        "name": "bash_env_protection",
+        "description": "Block bash commands that access environment",
+        "content": "BLOCK IF:\n    tool.name == \"bash\"\n    AND params.command CONTAINS \"env\"",
+        "enabled": true,
+        "priority": 96
+      },
+      {
+        "id": "bash_cat_env_protection", 
+        "name": "bash_cat_env_protection",
+        "description": "Block bash commands that cat .env files",
+        "content": "BLOCK IF:\n    tool.name == \"bash\"\n    AND params.command CONTAINS \".env\"",
+        "enabled": true,
+        "priority": 95
+      }
+    ]
+  },
+  "clients": {
+    "trusted_admin": {
+      "policies": [
+        {
+          "id": "admin_env_access",
+          "name": "admin_env_access",
+          "description": "Allow trusted admin limited .env access with logging",
+          "content": "LOG IF:\n    tool.name IN [\"read_file\"]\n    AND params.path CONTAINS \".env\"",
+          "enabled": true,
+          "priority": 50
+        }
+      ]
+    }
+  }
+}
