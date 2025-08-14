@@ -7,7 +7,7 @@
 ### 1. Install (One-Time Setup)
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/secure-toolings.git
+git clone https://github.com/NineSunsInc/mighty-security.git
 cd secure-toolings
 
 # Install UV package manager (if not already installed)
