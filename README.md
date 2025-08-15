@@ -19,7 +19,7 @@ A comprehensive security analysis tool that protects against malicious MCP (Mode
 
 MCP servers are becoming critical infrastructure for AI applications, but recent research shows:
 - **43% of MCP servers have command injection vulnerabilities**
-- **30% allow unrestricted URL fetches (SSRF attacks)**  
+- **30% allow unrestricted URL fetches (SSRF attacks)**
 - **22% leak files outside intended directories**
 - The GitHub MCP vulnerability showed how prompt injection can leak private repositories
 
@@ -80,7 +80,7 @@ python3 src/dashboard/app.py
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/secure-toolings.git
+git clone https://github.com/NineSunsInc/mighty-security.git
 cd secure-toolings
 
 # 2. Install UV package manager (recommended)
@@ -124,7 +124,7 @@ secure-toolings/
 │   ├── analyzers/         # Analysis engines
 │   │   ├── comprehensive/ # Core analysis suite
 │   │   ├── llm/          # LLM-powered analysis
-│   │   ├── security/     # Security rule engines  
+│   │   ├── security/     # Security rule engines
 │   │   └── taint/        # Data flow tracking
 │   ├── core/             # Core unified analyzer
 │   ├── runtime/          # Real-time monitoring
@@ -281,7 +281,7 @@ python3 mighty_mcp.py check  # Will recreate it
 
 ### Threat Levels
 - 🔴 **CRITICAL** (80-100%): Do not use - immediate compromise
-- 🟠 **HIGH** (60-79%): Significant risk - extensive review required  
+- 🟠 **HIGH** (60-79%): Significant risk - extensive review required
 - 🟡 **MEDIUM** (40-59%): Potential vulnerability - review before use
 - 🟢 **LOW** (20-39%): Minor concerns - generally safe
 - ✅ **MINIMAL** (0-19%): Safe to use
@@ -356,7 +356,7 @@ See [CONTRIBUTION.md](CONTRIBUTION.md) for guidelines.
 
 ### Coming Soon
 - GraphQL API
-- CI/CD integrations  
+- CI/CD integrations
 - Container scanning
 - Cloud deployment options
 
