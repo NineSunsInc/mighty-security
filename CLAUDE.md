@@ -12,9 +12,9 @@ MCP Security Suite - A unified security framework for Model Context Protocol (MC
 
 ### Setup & Installation
 ```bash
-# Python 3.11+ required
+# Python 3.13+ required
 # Using uv (recommended)
-uv sync -p 3.11
+uv sync -p 3.13
 
 # Alternative: pip with venv
 python3 -m venv .venv
@@ -242,3 +242,8 @@ Requires `CEREBRAS_API_KEY` in environment or `.env` file. The LLM provides enha
 - ALSO always follow DRY, instead of creating a new file, look and scan the project to make sure there are no other files that are similar. We want to maintain a clean space.
 - NEVER NEVER skip tests if they are failing, understand why it failed and propose a fix.
 - NEVER NEVER EVER delete files with `rm` or `rm -rf` without permissions.
+- **BEFORE CREATING ANY NEW FILE**: Always check if the functionality can be added to existing files. New files should only be created when absolutely necessary. Every improvement must be thoroughly evaluated for:
+  - **Security**: Does it introduce new attack vectors?
+  - **Capabilities**: Does it meaningfully enhance our detection/prevention?
+  - **Feasibility**: Can it be implemented without breaking existing functionality?
+  - **Performance**: Will it actually improve speed/efficiency or just add complexity?

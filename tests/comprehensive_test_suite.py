@@ -546,7 +546,8 @@ def validate_json_schema(json_data: str, schema: dict):
             verbose=False, 
             deep_scan=True, 
             enable_llm=False, 
-            use_cache=False  # Disable cache for fresh scans
+            use_cache=False,  # Disable cache for fresh scans
+            profile='development'  # Use development profile to scan test files
         )
         # Force disable smart filter for test evaluation (test files should be scanned)
         analyzer.smart_filter = None

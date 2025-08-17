@@ -9,6 +9,7 @@ from datetime import datetime
 from collections import defaultdict
 import json
 import textwrap
+from pathlib import Path
 
 class ComprehensiveReportFormatter:
     """Generate detailed security analysis reports"""

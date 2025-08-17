@@ -106,10 +106,49 @@ class BaseLLMAnalyzer(ABC):
                 else:
                     # JSON_END missing (truncated response) - try to extract valid JSON
                     json_str = response_text[start:].strip()
-                    # Attempt to close unclosed structures
-                    open_braces = json_str.count('{') - json_str.count('}')
-                    open_brackets = json_str.count('[') - json_str.count(']')
-                    json_str += ']' * open_brackets + '}' * open_braces
+                    
+                    # Try to find the end of the main JSON object more intelligently
+                    if json_str.startswith('{'):
+                        # Count braces to find balanced JSON
+                        brace_count = 0
+                        last_valid_pos = 0
+                        in_string = False
+                        escape_next = False
+                        
+                        for i, char in enumerate(json_str):
+                            if escape_next:
+                                escape_next = False
+                                continue
+                            
+                            if char == '\\':
+                                escape_next = True
+                                continue
+                                
+                            if char == '"' and not escape_next:
+                                in_string = not in_string
+                                continue
+                                
+                            if not in_string:
+                                if char == '{':
+                                    brace_count += 1
+                                elif char == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        last_valid_pos = i + 1
+                                        break
+                        
+                        if last_valid_pos > 0:
+                            json_str = json_str[:last_valid_pos]
+                        else:
+                            # Fallback: attempt to close unclosed structures
+                            open_braces = json_str.count('{') - json_str.count('}')
+                            open_brackets = json_str.count('[') - json_str.count(']')
+                            json_str += ']' * open_brackets + '}' * open_braces
+                    else:
+                        # Attempt to close unclosed structures
+                        open_braces = json_str.count('{') - json_str.count('}')
+                        open_brackets = json_str.count('[') - json_str.count(']')
+                        json_str += ']' * open_brackets + '}' * open_braces
             # Prefer fenced JSON if present
             elif '```json' in response_text:
                 json_start = response_text.find('```json') + 7

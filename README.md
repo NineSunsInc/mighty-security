@@ -54,7 +54,7 @@ MCP servers are becoming critical infrastructure for AI applications, but recent
 ## Quick Start
 
 ```bash
-# 1. Install dependencies (Python 3.11+ required)
+# 1. Install dependencies (Python 3.13+ required)
 uv sync
 
 # 2. Activate the virtual environment
@@ -73,7 +73,7 @@ python3 src/dashboard/app.py
 ## Installation
 
 ### Prerequisites
-- Python 3.11 or higher
+- Python 3 or higher
 - Git
 
 ### Step-by-Step Installation
