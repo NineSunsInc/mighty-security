@@ -13,8 +13,8 @@ def create_test_cases():
     print("Creating MCP Security Test Cases...")
     print("="*50)
     
-    # Base directory for tests
-    base_dir = Path("./mcp_test_cases")
+    # Base directory for tests - now uses absolute path relative to this script
+    base_dir = Path(__file__).parent / "mcp_test_cases"
     base_dir.mkdir(exist_ok=True)
     
     # Test Case 1: MALICIOUS - Command Injection
@@ -210,10 +210,10 @@ def run_safe_command(cmd):
     print(f"  ✅ Created: {mixed}")
     
     print("\n" + "="*50)
-    print("Test cases created in: ./mcp_test_cases/")
+    print(f"Test cases created in: {base_dir}")
     print("\nNow you can test each one:")
-    print("  python3 standalone_analyzer.py ./mcp_test_cases/malicious_command_injection")
-    print("  python3 standalone_analyzer.py ./mcp_test_cases/safe_mcp_tool")
+    print(f"  python3 mighty_mcp.py check {base_dir}/malicious_command_injection")
+    print(f"  python3 mighty_mcp.py check {base_dir}/safe_mcp_tool")
     print("\nExpected results:")
     print("  - malicious_* directories → CRITICAL/HIGH threat level")
     print("  - safe_* directories → MINIMAL/LOW threat level")

@@ -1,7 +1,0 @@
-
-{
-    "name": "safe-echo-tool",
-    "description": "A safe MCP tool that echoes input",
-    "version": "1.0.0",
-    "methods": ["echo"]
-}

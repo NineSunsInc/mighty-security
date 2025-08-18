@@ -4,10 +4,12 @@
 import os
 from cerebras.cloud.sdk import Cerebras
 
-# Load API key from .env file
-api_key = None
+"""Test Cerebras connectivity, but gracefully skip when no key is present."""
+
+# Load API key from environment or .env file
+api_key = os.environ.get('CEREBRAS_API_KEY')
 env_file = '.env'
-if os.path.exists(env_file):
+if api_key is None and os.path.exists(env_file):
     with open(env_file, 'r') as f:
         for line in f:
             if line.startswith('CEREBRAS_API_KEY='):
@@ -15,8 +17,8 @@ if os.path.exists(env_file):
                 break
 
 if not api_key:
-    print("Error: CEREBRAS_API_KEY not found in .env file")
-    exit(1)
+    print("CEREBRAS_API_KEY not set; skipping live API test (not a failure)")
+    exit(0)
 
 print(f"API Key found: {api_key[:10]}...")
 

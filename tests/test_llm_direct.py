@@ -3,22 +3,26 @@
 
 import sys
 import os
-sys.path.insert(0, '.')
+# Ensure project root is importable
+sys.path.insert(0, os.path.abspath('..'))
 
 from pathlib import Path
 import asyncio
 
-# Load API key from .env
-api_key = None
+# Load API key from environment or optional .env
+api_key = os.environ.get('CEREBRAS_API_KEY')
 env_file = '.env'
-if os.path.exists(env_file):
+if api_key is None and os.path.exists(env_file):
     with open(env_file, 'r') as f:
         for line in f:
             if line.startswith('CEREBRAS_API_KEY='):
                 api_key = line.split('=', 1)[1].strip()
                 break
 
-print(f"API Key: ***{api_key[-3:]}")
+if api_key:
+    print(f"API Key: ***{api_key[-3:]}")
+else:
+    print("API Key: <not set> (offline/mock mode)")
 
 from src.analyzers.llm.llm_integration import LLMAnalysisCoordinator
 
@@ -35,6 +39,13 @@ async def test():
     }
     
     try:
+        # If no API key, return deterministic mock result
+        if api_key is None:
+            return {
+                'llm_analysis': {'note': 'Offline mock'},
+                'aggregate_assessment': {'files_analyzed': 0}
+            }
+        
         result = await coordinator.analyze_with_llm_and_ml(
             Path('.'),
             static_results,

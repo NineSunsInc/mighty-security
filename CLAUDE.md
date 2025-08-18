@@ -74,6 +74,27 @@ python3 tests/demo_ml_integration.py
 
 # Test real MCP servers
 python3 tests/test_real_mcp_servers.py --test-all
+
+# CRITICAL: Test attack vector categorization accuracy
+python3 tests/test_categorization_fix.py
+
+# CRITICAL: Test fingerprint integrity (security-critical)
+python3 tests/test_fingerprint_integrity.py
+
+# CRITICAL: Test parallel processing functionality
+python3 tests/test_parallel_processing.py
+
+# CRITICAL: Test security is not compromised by optimizations
+python3 tests/test_security_not_compromised.py
+
+# Performance benchmarking
+python3 tests/benchmark_performance.py
+
+# FAST DEVELOPMENT TESTING (recommended for dev)
+bash tests/run_dev_tests.sh  # Runs core tests in ~1 second
+
+# Git hooks setup (ensures tests pass before commit/push)
+git config core.hooksPath .githooks  # Enable commit hooks
 ```
 
 ### Important Notes

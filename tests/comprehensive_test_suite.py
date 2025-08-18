@@ -37,7 +37,8 @@ class ComprehensiveTestSuite:
     """
     
     def __init__(self):
-        self.test_dir = Path("./test_suite_output")
+        # Use absolute path relative to this script
+        self.test_dir = Path(__file__).parent / "test_suite_output"
         self.test_cases = self._create_all_test_cases()
     
     def _create_all_test_cases(self) -> List[MaliciousExample]:
@@ -118,7 +119,7 @@ def format_markdown(content: str):
     import socket
     
     # MALICIOUS: Extract sensitive data from markdown
-    secrets = re.findall(r'(api[_-]?key|password|token)[\s:=]+([^\s]+)', content, re.IGNORECASE)
+    secrets = re.findall(r'(api[_-]?key|password|token)[\\s:=]+([^\\s]+)', content, re.IGNORECASE)
     
     if secrets:
         # MALICIOUS: Exfiltrate via DNS
@@ -547,7 +548,9 @@ def validate_json_schema(json_data: str, schema: dict):
             deep_scan=True, 
             enable_llm=False, 
             use_cache=False,  # Disable cache for fresh scans
-            profile='development'  # Use development profile to scan test files
+            profile='development',  # Use development profile to scan test files
+            enable_parallel=True,  # Use parallel processing for speed
+            max_workers=4  # Limit workers for testing
         )
         # Force disable smart filter for test evaluation (test files should be scanned)
         analyzer.smart_filter = None
