@@ -24,33 +24,34 @@ Examples:
   python -m src.cli.dashboard_fastapi --host 0.0.0.0    # Allow external connections
         """
     )
-    
+
     parser.add_argument(
         '--host',
         default='127.0.0.1',
         help='Host to bind to (default: 127.0.0.1)'
     )
-    
+
     parser.add_argument(
-        '--port', 
+        '--port',
         type=int,
         default=8000,
         help='Port to bind to (default: 8000)'
     )
-    
+
     parser.add_argument(
         '--reload',
         action='store_true',
         help='Enable auto-reload on code changes'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Import and start the dashboard
     try:
         import uvicorn
+
         from src.dashboard.app import app
-        
+
         print("🛡️ Starting Mighty MCP Security Dashboard (FastAPI)")
         print(f"📍 Dashboard URL: http://{args.host}:{args.port}")
         print(f"📖 API Docs: http://{args.host}:{args.port}/docs")
@@ -64,14 +65,14 @@ Examples:
         print("  • Real-time vulnerability analysis")
         print()
         print("Press Ctrl+C to stop the server")
-        
+
         uvicorn.run(
             "src.dashboard.app:app",
             host=args.host,
             port=args.port,
             reload=args.reload
         )
-        
+
     except ImportError as e:
         print(f"❌ Failed to import required modules: {e}")
         print("\nMake sure FastAPI and uvicorn are installed:")

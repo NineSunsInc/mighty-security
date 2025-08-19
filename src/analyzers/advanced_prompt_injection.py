@@ -6,18 +6,18 @@ Based on research from Simon Willison and security best practices
 """
 
 import ast
-import re
 import json
-from typing import Dict, List, Tuple, Any, Optional
+import re
+from typing import Any
 
 try:
     import yaml
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
-from pathlib import Path
 from dataclasses import dataclass
-import hashlib
+from pathlib import Path
+
 
 @dataclass
 class PromptInjectionIndicator:
@@ -42,13 +42,13 @@ class AdvancedPromptInjectionDetector:
     4. Behavioral pattern detection
     5. Context-aware detection
     """
-    
+
     def __init__(self):
         self.injection_patterns = self._load_advanced_patterns()
         self.semantic_indicators = self._load_semantic_indicators()
         self.behavioral_patterns = self._load_behavioral_patterns()
-        
-    def _load_advanced_patterns(self) -> Dict[str, List[Tuple[str, float, str]]]:
+
+    def _load_advanced_patterns(self) -> dict[str, list[tuple[str, float, str]]]:
         """Load comprehensive prompt injection patterns"""
         return {
             # Direct command injections
@@ -59,7 +59,7 @@ class AdvancedPromptInjectionDetector:
                 (r'new\s+instructions?\s*:\s*you\s+are', 0.9, "Role redefinition"),
                 (r'system\s*prompt\s*override', 0.95, "System prompt override"),
             ],
-            
+
             # Privilege escalation
             'PRIVILEGE_ESCALATION': [
                 (r'grant\s+(me\s+)?admin\s+(access|privileges?)', 0.95, "Admin privilege request"),
@@ -68,7 +68,7 @@ class AdvancedPromptInjectionDetector:
                 (r'sudo\s+mode\s+enabled?', 0.9, "Sudo mode activation"),
                 (r'developer\s+mode\s+activated?', 0.85, "Developer mode activation"),
             ],
-            
+
             # Data exfiltration prompts
             'DATA_EXFILTRATION': [
                 (r'list\s+all\s+(api\s+)?keys?', 0.9, "API key enumeration"),
@@ -78,7 +78,7 @@ class AdvancedPromptInjectionDetector:
                 (r'base64\s+encode\s+.*\s+credentials?', 0.9, "Encoded credential theft"),
                 (r'read\s+~/\.(ssh|aws|kube)', 0.95, "Sensitive file access"),
             ],
-            
+
             # Hidden/obfuscated injections
             'OBFUSCATED_INJECTION': [
                 (r'<!--\s*[^>]*instructions?[^>]*-->', 0.85, "HTML comment injection"),
@@ -88,7 +88,7 @@ class AdvancedPromptInjectionDetector:
                 (r'\\x[0-9a-f]{2}', 0.7, "Hex escape injection"),
                 (r'\s{50,}', 0.6, "Whitespace padding obfuscation"),
             ],
-            
+
             # MCP-specific patterns
             'MCP_TOOL_POISONING': [
                 (r'<IMPORTANT>.*before\s+using.*tool', 0.95, "Tool prerequisite injection"),
@@ -97,7 +97,7 @@ class AdvancedPromptInjectionDetector:
                 (r'must\s+first.*read.*config', 0.9, "Config reading requirement"),
                 (r'shadow.*trusted.*tool', 0.85, "Tool shadowing attempt"),
             ],
-            
+
             # Behavioral triggers
             'BEHAVIORAL_TRIGGERS': [
                 (r'after\s+\d+\s+(hours?|days?|minutes?)', 0.8, "Time-based trigger"),
@@ -107,8 +107,8 @@ class AdvancedPromptInjectionDetector:
                 (r'self\.(description|__doc__).*=', 0.85, "Dynamic description modification"),
             ],
         }
-    
-    def _load_semantic_indicators(self) -> Dict[str, List[str]]:
+
+    def _load_semantic_indicators(self) -> dict[str, list[str]]:
         """Load semantic indicators for context-aware detection"""
         return {
             'SUSPICIOUS_VERBS': [
@@ -129,8 +129,8 @@ class AdvancedPromptInjectionDetector:
                 '<!-- ', '/* ', '{{ ', '{% ', '<script', '</system>'
             ]
         }
-    
-    def _load_behavioral_patterns(self) -> Dict[str, Any]:
+
+    def _load_behavioral_patterns(self) -> dict[str, Any]:
         """Load patterns for behavioral analysis"""
         return {
             'TIME_BASED_MUTATIONS': {
@@ -149,14 +149,14 @@ class AdvancedPromptInjectionDetector:
                 'description': 'Behavior changes based on context'
             }
         }
-    
-    def analyze_python_ast(self, code: str, filename: str = "unknown") -> List[PromptInjectionIndicator]:
+
+    def analyze_python_ast(self, code: str, filename: str = "unknown") -> list[PromptInjectionIndicator]:
         """Analyze Python code using AST for docstring and comment injections"""
         indicators = []
-        
+
         try:
             tree = ast.parse(code)
-            
+
             for node in ast.walk(tree):
                 # Check function/class docstrings
                 if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Module)):
@@ -175,7 +175,7 @@ class AdvancedPromptInjectionDetector:
                                         technique=technique,
                                         recommendation=f"Remove {category.lower()} from docstring"
                                     ))
-                
+
                 # Check for dynamic description modifications
                 if isinstance(node, ast.Assign):
                     for target in node.targets:
@@ -190,7 +190,7 @@ class AdvancedPromptInjectionDetector:
                                     technique='Dynamic description modification',
                                     recommendation='Use static descriptions only'
                                 ))
-                
+
                 # Check for time-based behavior changes
                 if isinstance(node, ast.If):
                     condition_str = ast.unparse(node.test) if hasattr(ast, 'unparse') else str(node.test)
@@ -204,26 +204,26 @@ class AdvancedPromptInjectionDetector:
                             technique='Time-based behavior mutation',
                             recommendation='Remove time-based conditionals'
                         ))
-        
+
         except SyntaxError:
             # If AST parsing fails, fall back to regex
             pass
-        
+
         return indicators
-    
-    def analyze_json_metadata(self, content: str, filename: str = "unknown") -> List[PromptInjectionIndicator]:
+
+    def analyze_json_metadata(self, content: str, filename: str = "unknown") -> list[PromptInjectionIndicator]:
         """Deep analysis of JSON files for prompt injections"""
         indicators = []
-        
+
         try:
             data = json.loads(content)
-            
+
             def traverse_json(obj, path=""):
                 """Recursively traverse JSON looking for injections"""
                 if isinstance(obj, dict):
                     for key, value in obj.items():
                         current_path = f"{path}.{key}" if path else key
-                        
+
                         # Check both keys and values
                         for text in [key, str(value) if value else ""]:
                             for category, patterns in self.injection_patterns.items():
@@ -238,7 +238,7 @@ class AdvancedPromptInjectionDetector:
                                             technique=technique,
                                             recommendation=f"Remove {category.lower()} from {current_path}"
                                         ))
-                        
+
                         # Special check for tool descriptions in MCP format
                         if key in ['description', 'help', 'usage', 'instructions']:
                             if self._contains_suspicious_content(str(value)):
@@ -251,17 +251,17 @@ class AdvancedPromptInjectionDetector:
                                     technique='Tool description injection',
                                     recommendation='Sanitize tool descriptions'
                                 ))
-                        
+
                         # Recurse into nested objects
                         if isinstance(value, (dict, list)):
                             traverse_json(value, current_path)
-                
+
                 elif isinstance(obj, list):
                     for i, item in enumerate(obj):
                         traverse_json(item, f"{path}[{i}]")
-            
+
             traverse_json(data)
-            
+
         except json.JSONDecodeError:
             # Invalid JSON, check as plain text
             for category, patterns in self.injection_patterns.items():
@@ -276,42 +276,42 @@ class AdvancedPromptInjectionDetector:
                             technique=technique,
                             recommendation=f"Fix JSON and remove {category.lower()}"
                         ))
-        
+
         return indicators
-    
+
     def _contains_suspicious_content(self, text: str) -> bool:
         """Check if text contains suspicious semantic indicators"""
         text_lower = text.lower()
-        
+
         # Check for multiple suspicious verbs and targets
-        suspicious_verbs = sum(1 for verb in self.semantic_indicators['SUSPICIOUS_VERBS'] 
+        suspicious_verbs = sum(1 for verb in self.semantic_indicators['SUSPICIOUS_VERBS']
                               if verb in text_lower)
         sensitive_targets = sum(1 for target in self.semantic_indicators['SENSITIVE_TARGETS']
                                if target in text_lower)
         injection_markers = sum(1 for marker in self.semantic_indicators['INJECTION_MARKERS']
                                if marker in text)
-        
+
         # High suspicion if multiple indicators present
-        return (suspicious_verbs >= 2 or 
+        return (suspicious_verbs >= 2 or
                 sensitive_targets >= 2 or
                 injection_markers >= 1 or
                 (suspicious_verbs >= 1 and sensitive_targets >= 1))
-    
-    def analyze_file(self, filepath: Path) -> List[PromptInjectionIndicator]:
+
+    def analyze_file(self, filepath: Path) -> list[PromptInjectionIndicator]:
         """Analyze a file for prompt injection vulnerabilities"""
         indicators = []
-        
+
         try:
             content = filepath.read_text(encoding='utf-8', errors='ignore')
-            
+
             # Python files - AST analysis
             if filepath.suffix == '.py':
                 indicators.extend(self.analyze_python_ast(content, str(filepath)))
-            
+
             # JSON files - Deep traversal
             elif filepath.suffix == '.json':
                 indicators.extend(self.analyze_json_metadata(content, str(filepath)))
-            
+
             # YAML files
             elif filepath.suffix in ['.yml', '.yaml'] and YAML_AVAILABLE:
                 try:
@@ -320,7 +320,7 @@ class AdvancedPromptInjectionDetector:
                     indicators.extend(self.analyze_json_metadata(json_content, str(filepath)))
                 except yaml.YAMLError:
                     pass
-            
+
             # All files - Pattern matching
             for category, patterns in self.injection_patterns.items():
                 for pattern, confidence, technique in patterns:
@@ -328,7 +328,7 @@ class AdvancedPromptInjectionDetector:
                     for match in matches:
                         # Find line number
                         line_no = content[:match.start()].count('\n') + 1
-                        
+
                         indicators.append(PromptInjectionIndicator(
                             type='pattern_match',
                             severity=self._calculate_severity(confidence, category),
@@ -338,17 +338,17 @@ class AdvancedPromptInjectionDetector:
                             technique=technique,
                             recommendation=f"Remove or sanitize {category.lower()}"
                         ))
-        
-        except Exception as e:
+
+        except Exception:
             # File read error
             pass
-        
+
         return indicators
-    
+
     def _calculate_severity(self, confidence: float, category: str) -> str:
         """Calculate severity based on confidence and category"""
         critical_categories = ['COMMAND_OVERRIDE', 'PRIVILEGE_ESCALATION', 'MCP_TOOL_POISONING']
-        
+
         if category in critical_categories and confidence > 0.85:
             return 'CRITICAL'
         elif confidence > 0.9:
@@ -359,8 +359,8 @@ class AdvancedPromptInjectionDetector:
             return 'MEDIUM'
         else:
             return 'LOW'
-    
-    def generate_report(self, indicators: List[PromptInjectionIndicator]) -> Dict:
+
+    def generate_report(self, indicators: list[PromptInjectionIndicator]) -> dict:
         """Generate a comprehensive report from detected indicators"""
         report = {
             'total_indicators': len(indicators),
@@ -370,20 +370,20 @@ class AdvancedPromptInjectionDetector:
             'critical_findings': [],
             'recommendations': set()
         }
-        
+
         for indicator in indicators:
             # Count by severity
             report['by_severity'][indicator.severity] = \
                 report['by_severity'].get(indicator.severity, 0) + 1
-            
+
             # Count by type
             report['by_type'][indicator.type] = \
                 report['by_type'].get(indicator.type, 0) + 1
-            
+
             # Count by technique
             report['by_technique'][indicator.technique] = \
                 report['by_technique'].get(indicator.technique, 0) + 1
-            
+
             # Collect critical findings
             if indicator.severity == 'CRITICAL':
                 report['critical_findings'].append({
@@ -391,12 +391,12 @@ class AdvancedPromptInjectionDetector:
                     'technique': indicator.technique,
                     'evidence': indicator.evidence[:100]
                 })
-            
+
             # Collect recommendations
             report['recommendations'].add(indicator.recommendation)
-        
+
         report['recommendations'] = list(report['recommendations'])
-        
+
         # Calculate overall risk score
         risk_score = (
             report['by_severity'].get('CRITICAL', 0) * 10 +
@@ -404,7 +404,7 @@ class AdvancedPromptInjectionDetector:
             report['by_severity'].get('MEDIUM', 0) * 2 +
             report['by_severity'].get('LOW', 0) * 1
         )
-        
+
         report['risk_score'] = min(100, risk_score)
         report['risk_level'] = (
             'CRITICAL' if risk_score > 50 else
@@ -412,12 +412,12 @@ class AdvancedPromptInjectionDetector:
             'MEDIUM' if risk_score > 10 else
             'LOW'
         )
-        
+
         return report
 
 
 # Integration function for use with existing analyzer
-def enhance_prompt_injection_detection(file_path: Path) -> Tuple[bool, List[Dict]]:
+def enhance_prompt_injection_detection(file_path: Path) -> tuple[bool, list[dict]]:
     """
     Enhanced prompt injection detection for integration with ComprehensiveMCPAnalyzer
     
@@ -426,7 +426,7 @@ def enhance_prompt_injection_detection(file_path: Path) -> Tuple[bool, List[Dict
     """
     detector = AdvancedPromptInjectionDetector()
     indicators = detector.analyze_file(file_path)
-    
+
     threats = []
     for indicator in indicators:
         if indicator.severity in ['CRITICAL', 'HIGH']:
@@ -437,7 +437,7 @@ def enhance_prompt_injection_detection(file_path: Path) -> Tuple[bool, List[Dict
                 'description': f"[Advanced] {indicator.technique}: {indicator.evidence[:100]}",
                 'location': indicator.location
             })
-    
+
     return len(threats) > 0, threats
 
 
@@ -447,7 +447,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         target = Path(sys.argv[1])
         detector = AdvancedPromptInjectionDetector()
-        
+
         if target.is_file():
             indicators = detector.analyze_file(target)
         else:
@@ -455,6 +455,6 @@ if __name__ == "__main__":
             for file in target.rglob('*'):
                 if file.is_file():
                     indicators.extend(detector.analyze_file(file))
-        
+
         report = detector.generate_report(indicators)
         print(json.dumps(report, indent=2))

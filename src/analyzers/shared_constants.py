@@ -6,7 +6,7 @@ Centralizes commonly used constants and patterns
 
 # File Extensions by Category
 CODE_EXTENSIONS = {
-    '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java', 
+    '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java',
     '.cpp', '.c', '.cs', '.php', '.sh', '.rs', '.swift', '.kt',
     '.scala', '.lua', '.perl', '.r', '.m', '.mm', '.h', '.hpp'
 }
@@ -17,8 +17,8 @@ CONFIG_EXTENSIONS = {
 }
 
 IMPORTANT_FILES = {
-    'mcp.json', 'package.json', 'requirements.txt', 'go.mod', 
-    'cargo.toml', 'Gemfile', 'pom.xml', 'build.gradle', 
+    'mcp.json', 'package.json', 'requirements.txt', 'go.mod',
+    'cargo.toml', 'Gemfile', 'pom.xml', 'build.gradle',
     'composer.json', 'setup.py', 'setup.cfg', 'pyproject.toml',
     '.env', '.env.local', '.env.production', 'Dockerfile',
     'docker-compose.yml', 'Makefile', 'CMakeLists.txt'
@@ -39,7 +39,7 @@ LLM_SKIP_PATTERNS = [
     # Test files
     '_test.go', '_test.py', '_test.js', '_test.ts', '_test.rb', '_test.java',
     '.test.js', '.test.ts', '.spec.js', '.spec.ts', '.test.py',
-    '/test/', '/tests/', '/testing/', '/__tests__/', 
+    '/test/', '/tests/', '/testing/', '/__tests__/',
     '/e2e/', '/integration/', '/fixtures/', '/spec/', '/specs/',
     # Package/Library directories
     '/pkg/',          # Go packages
@@ -105,7 +105,7 @@ LANGUAGE_MAP = {
     '.py': 'Python',
     '.js': 'JavaScript',
     '.mjs': 'JavaScript',
-    '.cjs': 'JavaScript', 
+    '.cjs': 'JavaScript',
     '.ts': 'TypeScript',
     '.tsx': 'TypeScript',
     '.jsx': 'JavaScript',
@@ -144,10 +144,13 @@ LANGUAGE_MAP = {
     '.jl': 'Julia'
 }
 
-# Size Limits
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-MAX_ANALYSIS_SIZE = 500 * 1024   # 500KB for deep analysis
-MAX_ENTROPY_SIZE = 100 * 1024    # 100KB for entropy calculation
+# Import centralized config
+from .config import AnalyzerConfig
+
+# Size Limits - now from centralized config
+MAX_FILE_SIZE = AnalyzerConfig.MAX_FILE_SIZE
+MAX_ANALYSIS_SIZE = AnalyzerConfig.MAX_ANALYSIS_SIZE
+MAX_ENTROPY_SIZE = AnalyzerConfig.MAX_ENTROPY_SIZE
 
 # Severity Mappings
 SEVERITY_WEIGHTS = {
@@ -179,62 +182,62 @@ def should_skip_file(file_path, check_security=False):
         bool: True if file should be skipped
     """
     from pathlib import Path
-    
+
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
+
     # Check directory components
     path_parts = set(p.lower() for p in file_path.parts)
     if any(skip_dir in path_parts for skip_dir in SKIP_DIRECTORIES):
         return True
-    
+
     # Check hidden files (except .env)
     if file_path.name.startswith('.') and file_path.name not in SECURITY_FILES:
         return True
-    
+
     # Check file size
     try:
         if file_path.is_file() and file_path.stat().st_size > MAX_FILE_SIZE:
             return True
-    except:
+    except OSError:
         pass
-    
+
     # Check extensions
     if file_path.suffix.lower() in SKIP_EXTENSIONS:
         return True
-    
+
     # If checking security, don't skip security files
     if check_security and file_path.name in SECURITY_FILES:
         return False
-    
+
     return False
 
 def is_code_file(file_path):
     """Check if a file is a code file"""
     from pathlib import Path
-    
+
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
+
     return file_path.suffix.lower() in CODE_EXTENSIONS
 
 def is_config_file(file_path):
     """Check if a file is a configuration file"""
     from pathlib import Path
-    
+
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
-    return (file_path.suffix.lower() in CONFIG_EXTENSIONS or 
+
+    return (file_path.suffix.lower() in CONFIG_EXTENSIONS or
             file_path.name in IMPORTANT_FILES)
 
 def detect_language(file_path):
     """Detect programming language from file extension"""
     from pathlib import Path
-    
+
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
+
     return LANGUAGE_MAP.get(file_path.suffix.lower())
 
 def get_scannable_files(repo_path, include_configs=True, include_security=True):
@@ -250,17 +253,17 @@ def get_scannable_files(repo_path, include_configs=True, include_security=True):
         List of Path objects
     """
     from pathlib import Path
-    
+
     repo_path = Path(repo_path)
     scannable_files = []
-    
+
     for file_path in repo_path.rglob("*"):
         if not file_path.is_file():
             continue
-        
+
         if should_skip_file(file_path, check_security=include_security):
             continue
-        
+
         # Include based on type
         if is_code_file(file_path):
             scannable_files.append(file_path)
@@ -268,7 +271,7 @@ def get_scannable_files(repo_path, include_configs=True, include_security=True):
             scannable_files.append(file_path)
         elif include_security and file_path.name in SECURITY_FILES:
             scannable_files.append(file_path)
-    
+
     return scannable_files
 
 def calculate_severity_score(severity_string):

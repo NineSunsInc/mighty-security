@@ -1,16 +1,45 @@
 # Dashboard Instructions
 
-## Environment Setup
-ALWAYS activate the virtual environment first using uv:
+## Core Commandments
+1. **NEVER take shortcuts** - The hard route is the only way to success
+2. **This saves lives** - We build security tools that protect developers and users
+3. **Quality over speed** - Better to do it right than do it fast
+4. **DRY principle** - Reuse existing code, don't duplicate functionality
+5. **Test failures matter** - NEVER skip failing tests, understand and fix them
+6. **No destructive operations** - NEVER use `rm -rf` without explicit permission
+7. **Mighty brand identity** - Use our colors (goldenYellow, vividSkyBlue, darkBlue, naturalLight)
+8. **OSS excellence** - Document clearly, avoid jargon, build community trust
+
+## Quick Start
 ```bash
-# From dashboard directory
+# Setup (from dashboard directory)
 cd ../..
 uv sync
 source .venv/bin/activate
 cd src/dashboard
+
+# Run backend
+python3 app.py  # Port 8083
+
+# Run frontend (separate terminal)
+npm run dev     # Port 3002
+
+# Build for production
+npm run build
 ```
 
-## Running the Dashboard
+## Architecture
+- **Backend**: FastAPI (app.py) - serves API and static files
+- **Frontend**: React + Vite + Tailwind CSS
+- **Database**: SQLite (analysis_cache.db)
+- **Main entry**: mighty_mcp.py (all functionality through this CLI)
+
+## Brand Guidelines
+- **Colors**: goldenYellow (#FEDC25), vividSkyBlue (#178EB9), darkBlue (#127294)
+- **Logo**: /static/mighty-icon.png and mighty-logo.png
+- **Copyright**: "A Mighty OSS Project by Nine Suns, Inc. • mightynetwork.ai"
+
+## Testing
 ```bash
 # ALWAYS use python3 explicitly
 python3 app.py

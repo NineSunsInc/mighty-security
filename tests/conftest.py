@@ -2,20 +2,19 @@
 Pytest configuration and shared fixtures for MCP Security Suite
 """
 
-import pytest
-import tempfile
-import shutil
 import json
-from pathlib import Path
-from typing import Dict, List
-import sys
 import os
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
-
 
 # ============================================================================
 # Directory and File Fixtures
@@ -36,10 +35,10 @@ def temp_repo(temp_dir):
     (temp_dir / "src").mkdir()
     (temp_dir / "tests").mkdir()
     (temp_dir / ".git").mkdir()
-    
+
     # Add a README
     (temp_dir / "README.md").write_text("# Test Repository\n")
-    
+
     # Add a Python file
     (temp_dir / "src" / "main.py").write_text("""
 def main():
@@ -48,7 +47,7 @@ def main():
 if __name__ == "__main__":
     main()
 """)
-    
+
     return temp_dir
 
 
@@ -252,7 +251,7 @@ def mcp_project(temp_dir, mcp_manifest):
     # Create mcp.json
     with open(temp_dir / "mcp.json", 'w') as f:
         json.dump(mcp_manifest, f, indent=2)
-    
+
     # Create tool file
     tool_file = temp_dir / "test_tool.py"
     tool_file.write_text("""
@@ -261,7 +260,7 @@ def handle(params):
     input_data = params.get("input", "")
     return {"output": f"Processed: {input_data}"}
 """)
-    
+
     # Create main server file
     server_file = temp_dir / "server.py"
     server_file.write_text("""
@@ -272,7 +271,7 @@ server = Server()
 if __name__ == "__main__":
     server.run()
 """)
-    
+
     return temp_dir
 
 
@@ -356,25 +355,25 @@ def assert_threat_category():
 def benchmark_timer():
     """Simple timer for benchmarking"""
     import time
-    
+
     class Timer:
         def __init__(self):
             self.start_time = None
             self.end_time = None
-        
+
         def start(self):
             self.start_time = time.perf_counter()
-        
+
         def stop(self):
             self.end_time = time.perf_counter()
             return self.elapsed
-        
+
         @property
         def elapsed(self):
             if self.start_time and self.end_time:
                 return self.end_time - self.start_time
             return None
-    
+
     return Timer()
 
 
@@ -393,7 +392,7 @@ def cleanup_test_artifacts():
         "test_suite_output",
         "mcp_test_cases"
     ]
-    
+
     root_path = Path.cwd()
     for pattern in test_patterns:
         for file_path in root_path.glob(pattern):

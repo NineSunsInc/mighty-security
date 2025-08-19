@@ -4,35 +4,28 @@ Mighty MCP Security Dashboard - FastAPI Version
 Comprehensive web interface for all MCP security scanning capabilities
 """
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-import json
-import sqlite3
-from datetime import datetime, timedelta
-import sys
 import os
-import uuid
-import subprocess
-import tempfile
-import shutil
-import asyncio
 import re
-from typing import Optional, Dict, List, Any
-import aiofiles
+import sys
+import tempfile
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.analyzers.database import AnalysisCacheDB
 from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+from src.analyzers.database import AnalysisCacheDB
 from src.analyzers.llm.cerebras_analyzer import CerebrasAnalyzer
 from src.configs.discovery import ConfigDiscovery
-from src.signatures.manager import SignatureManager
 from src.policies.manager import PolicyManager
 from src.runtime.session import SessionManager
-from src.runtime.analyzer_integration import AnalyzerIntegration
+from src.signatures.manager import SignatureManager
 
 app = FastAPI(
     title="Mighty MCP Security Dashboard",
@@ -57,7 +50,7 @@ session_manager = SessionManager()
 try:
     cerebras_analyzer = CerebrasAnalyzer()
     LLM_AVAILABLE = True
-except:
+except Exception:
     cerebras_analyzer = None
     LLM_AVAILABLE = False
 
@@ -72,7 +65,7 @@ SCAN_MODES = {
         "description": "Analyze ANY GitHub repository for security threats",
         "capabilities": [
             "✅ Automatic repository cloning",
-            "✅ Full AST-based code analysis", 
+            "✅ Full AST-based code analysis",
             "✅ 50+ threat pattern detection",
             "✅ Secret/credential scanning",
             "✅ Command injection detection",
@@ -83,7 +76,7 @@ SCAN_MODES = {
         "risk_level": "WORKING"
     },
     "local_scan": {
-        "name": "Local File/Directory Scanner", 
+        "name": "Local File/Directory Scanner",
         "description": "Scan files or entire directories on your computer",
         "capabilities": [
             "✅ Single file or full directory",
@@ -113,13 +106,24 @@ SCAN_MODES = {
 
 @app.get("/")
 async def index():
-    """Serve the static dashboard HTML"""
+    """Serve the React app"""
+    # Check for built React app first
+    react_build = Path(__file__).parent / "static" / "dist" / "index.html"
+    if react_build.exists():
+        return FileResponse(react_build)
+
+    # Fallback to legacy HTML
     html_file = Path(__file__).parent / "static" / "dashboard.html"
     if html_file.exists():
         return FileResponse(html_file)
     else:
         # Fallback to inline HTML if file doesn't exist
         return HTMLResponse(content=get_dashboard_html())
+
+# Serve React app static files
+react_static_dir = Path(__file__).parent / "static" / "dist"
+if react_static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(react_static_dir / "assets")), name="react-assets")
 
 @app.get("/api/scan-modes")
 async def get_scan_modes():
@@ -132,10 +136,10 @@ async def scan_local(request: Request):
     """Scan a local file or directory using the comprehensive analyzer"""
     data = await request.json()
     target_path = data.get('target_path')
-    
+
     if not target_path:
         raise HTTPException(status_code=400, detail="No target path provided")
-    
+
     try:
         # Use the ACTUAL working analyzer with profile support
         analyzer = ComprehensiveMCPAnalyzer(
@@ -144,9 +148,16 @@ async def scan_local(request: Request):
             enable_llm=data.get('enable_llm', False),
             profile=data.get('profile', 'production')  # Add profile support
         )
-        
+
         # This handles both files and directories!
         report = analyzer.analyze_repository(target_path)
+
+        # Extract name for local files/directories
+        path_obj = Path(target_path)
+        if path_obj.is_file():
+            display_name = f"Local: {path_obj.name}"
+        else:
+            display_name = f"Local: {path_obj.name or path_obj.parent.name}"
         
         # Store in database
         db = get_db()
@@ -158,6 +169,14 @@ async def scan_local(request: Request):
             total_threats=len(report.threats_found)
         )
         
+        # Store repository metadata with proper name
+        db.store_repository(
+            repo_url=f"file://{target_path}",
+            repo_name=display_name,
+            latest_commit_sha='local',
+            scan_timestamp=datetime.now()
+        )
+
         # Store detailed threats
         for threat in report.threats_found:
             db.store_threat(
@@ -170,7 +189,7 @@ async def scan_local(request: Request):
                 description=threat.description,
                 evidence=threat.evidence
             )
-        
+
         return {
             'run_id': run_id,
             'target': target_path,
@@ -188,7 +207,7 @@ async def scan_local(request: Request):
             'total_lines': report.total_lines_analyzed,
             'analysis_complete': True
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -198,32 +217,32 @@ async def scan_config_discovery():
     """Discover and analyze all MCP configurations"""
     try:
         configs = config_discovery.discover_all()
-        
+
         results = {
             'configs_found': len(configs),
             'clients': {},
             'total_servers': 0,
             'total_threats': 0
         }
-        
+
         for config in configs:
             client_name = config['client']
             config_data = config['config']
-            
+
             if not config_data:
                 continue
-            
+
             servers = config_data.get('mcpServers', config_data.get('servers', {}))
-            
+
             results['clients'][client_name] = {
                 'path': config['path'],
                 'servers': list(servers.keys()),
                 'server_count': len(servers),
                 'threats': []
             }
-            
+
             results['total_servers'] += len(servers)
-            
+
             # Analyze each server
             for server_name, server_def in servers.items():
                 # Verify signature
@@ -232,7 +251,7 @@ async def scan_config_discovery():
                     'description': server_def.get('description', ''),
                     'parameters': server_def
                 })
-                
+
                 if sig_result['threat_level'] in ['high', 'critical']:
                     results['clients'][client_name]['threats'].append({
                         'server': server_name,
@@ -240,9 +259,9 @@ async def scan_config_discovery():
                         'level': sig_result['threat_level']
                     })
                     results['total_threats'] += 1
-        
+
         return results
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -251,10 +270,10 @@ async def scan_github_repo(request: Request):
     """Scan a GitHub repository using the WORKING analyzer"""
     data = await request.json()
     repo_url = data.get('repo_url')
-    
+
     if not repo_url or 'github.com' not in repo_url:
         raise HTTPException(status_code=400, detail="Invalid GitHub URL")
-    
+
     try:
         # Use the ACTUAL working analyzer that handles GitHub properly with profile support!
         analyzer = ComprehensiveMCPAnalyzer(
@@ -263,14 +282,20 @@ async def scan_github_repo(request: Request):
             enable_llm=data.get('enable_llm', False),
             profile=data.get('profile', 'production')  # Add profile support
         )
-        
+
         # This already handles GitHub cloning and everything!
         report = analyzer.analyze_repository(repo_url)
-        
-        # Extract repo name for display
-        match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', repo_url)
-        repo_name = f"{match.group(1)}/{match.group(2)}" if match else repo_url
-        
+
+        # Extract repo name for display - handle various GitHub URL formats
+        match = re.search(r'github\.com[:/]([^/]+)/([^/.?#]+)', repo_url)
+        if match:
+            repo_name = f"{match.group(1)}/{match.group(2)}"
+            # Remove .git extension if present
+            repo_name = repo_name.replace('.git', '')
+        else:
+            # Fallback to last part of URL
+            repo_name = repo_url.split('/')[-1].replace('.git', '')
+
         # Store in database
         db = get_db()
         run_id = db.store_analysis_run(
@@ -280,7 +305,7 @@ async def scan_github_repo(request: Request):
             threat_score=report.threat_score * 100,  # Convert to percentage
             total_threats=len(report.threats_found)
         )
-        
+
         # Store repo metadata
         db.store_repository(
             repo_url=repo_url,
@@ -288,7 +313,7 @@ async def scan_github_repo(request: Request):
             latest_commit_sha=report.merkle_root[:40],  # Use merkle root as commit reference
             scan_timestamp=datetime.now()
         )
-        
+
         # Store detailed threats
         for threat in report.threats_found:
             db.store_threat(
@@ -301,7 +326,7 @@ async def scan_github_repo(request: Request):
                 description=threat.description,
                 evidence=threat.evidence
             )
-        
+
         return {
             'run_id': run_id,
             'repo': repo_name,
@@ -325,7 +350,7 @@ async def scan_github_repo(request: Request):
             },
             'analysis_complete': True
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -334,51 +359,51 @@ async def verify_signatures(request: Request):
     """Verify tool signatures"""
     data = await request.json()
     tools = data.get('tools', [])
-    
+
     results = {
         'tools_checked': len(tools),
         'signatures': {},
         'threats_detected': []
     }
-    
+
     for tool in tools:
         sig_result = signature_manager.verify_tool(tool)
         results['signatures'][tool['name']] = sig_result
-        
+
         if sig_result['threat_level'] in ['high', 'critical']:
             results['threats_detected'].append({
                 'tool': tool['name'],
                 'threat': sig_result['status'],
                 'level': sig_result['threat_level']
             })
-    
+
     return results
 
 @app.post("/api/scan/policy-check")
 async def check_policies(request: Request):
     """Check tools against security policies"""
     data = await request.json()
-    
+
     client = data.get('client', 'default')
     server = data.get('server', 'default')
     tools = data.get('tools', [])
-    
+
     results = {
         'policies_evaluated': 0,
         'violations': [],
         'recommendations': []
     }
-    
+
     # Get applicable policies
     policies = policy_manager.get_policies(client, server)
     results['policies_evaluated'] = len(policies)
-    
+
     for policy in policies:
         for tool in tools:
             violation = await policy_manager.evaluate_tool(tool, policy)
             if violation:
                 results['violations'].append(violation)
-    
+
     # Add recommendations
     if results['violations']:
         results['recommendations'] = [
@@ -386,7 +411,7 @@ async def check_policies(request: Request):
             "Consider using alternative tools",
             "Implement additional monitoring"
         ]
-    
+
     return results
 
 @app.post("/api/scan/unified")
@@ -395,7 +420,7 @@ async def unified_scan(request: Request):
     data = await request.json()
     target = data.get('target')
     scan_type = data.get('type', 'auto')  # auto, file, directory, github
-    
+
     try:
         results = {
             'scan_id': str(uuid.uuid4()),
@@ -407,7 +432,7 @@ async def unified_scan(request: Request):
             'threat_breakdown': {},
             'recommendations': []
         }
-        
+
         # Determine scan type
         if scan_type == 'auto':
             if 'github.com' in target:
@@ -416,36 +441,36 @@ async def unified_scan(request: Request):
                 scan_type = 'file'
             elif Path(target).is_dir():
                 scan_type = 'directory'
-        
+
         # Run appropriate scans
         if scan_type == 'file':
             report = await comprehensive_analyzer.analyze_file(target)
             results['analyses_performed'].append('static_analysis')
             results['total_threats'] = len(report.threats_found)
             results['threat_breakdown']['static'] = report.threats_found
-            
+
             # Signature verification
             sig_result = signature_manager.verify_tool({'name': Path(target).name, 'path': target})
             results['analyses_performed'].append('signature_verification')
             results['threat_breakdown']['signature'] = sig_result
-            
+
             # Policy check
             if policy_manager:
                 policy_result = await policy_manager.evaluate_file(target)
                 results['analyses_performed'].append('policy_evaluation')
                 results['threat_breakdown']['policy'] = policy_result
-        
+
         elif scan_type == 'github':
             # Similar to github scan above
             results['analyses_performed'].append('github_analysis')
             # ... implementation
-        
+
         # Generate recommendations based on threats
         if results['total_threats'] > 0:
             results['recommendations'] = generate_recommendations(results['threat_breakdown'])
-        
+
         return results
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -507,15 +532,27 @@ async def get_learning_content():
             ]
         }
     }
-    
+
     return learning_content
+
+@app.get("/api/tasks")
+async def get_tasks():
+    """Get all tasks (for now return empty array as tasks are not persisted)"""
+    # TODO: Implement task persistence if needed
+    return []
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """Cancel a running task"""
+    # TODO: Implement actual task cancellation logic
+    return {"status": "cancelled", "task_id": task_id}
 
 @app.get("/api/stats")
 async def get_stats():
     """Get overall statistics"""
     db = get_db()
     stats = db.get_threat_statistics()
-    
+
     # Get recent scans
     cursor = db.conn.cursor()
     cursor.execute("""
@@ -527,21 +564,38 @@ async def get_stats():
         ORDER BY r.scan_timestamp DESC
         LIMIT 10
     """)
-    
+
     recent_scans = []
-    for row in cursor.fetchall():
-        recent_scans.append({
-            'run_id': row['run_id'],
-            'repo_name': row['repo_name'] or Path(row['repo_url']).name,
-            'repo_url': row['repo_url'],
-            'timestamp': row['scan_timestamp'],
-            'threat_level': row['threat_level'],
-            'threat_score': row['threat_score'],
-            'total_threats': row['total_threats'],
-            'scan_type': row['scan_type'],
-            'llm_enabled': row['llm_enabled']
-        })
-    
+    rows = cursor.fetchall()
+    for row in rows:
+        # Handle both dict-like and tuple-like access
+        if hasattr(row, '__getitem__') and hasattr(row, 'keys'):
+            # Row object (dict-like)
+            recent_scans.append({
+                'run_id': row['run_id'],
+                'repo_name': row['repo_name'] or Path(row['repo_url']).name,
+                'repo_url': row['repo_url'],
+                'timestamp': row['scan_timestamp'],
+                'threat_level': row['threat_level'],
+                'threat_score': row['threat_score'],
+                'total_threats': row['total_threats'],
+                'scan_type': row['scan_type'],
+                'llm_enabled': row['llm_enabled']
+            })
+        else:
+            # Tuple access (fallback)
+            recent_scans.append({
+                'run_id': row[0],
+                'repo_name': row[9] or Path(row[1]).name if row[9] is not None else Path(row[1]).name,
+                'repo_url': row[1],
+                'timestamp': row[2],
+                'threat_level': row[3],
+                'threat_score': row[4],
+                'total_threats': row[5],
+                'scan_type': row[6],
+                'llm_enabled': row[7]
+            })
+
     return {
         'statistics': stats,
         'recent_scans': recent_scans,
@@ -553,7 +607,7 @@ async def get_stats():
 async def get_run(run_id: str):
     """Get details of a specific analysis run"""
     db = get_db()
-    
+
     try:
         data = db.export_to_json(run_id)
         return JSONResponse(content=data)
@@ -569,27 +623,27 @@ async def upload_and_scan(file: UploadFile = File(...)):
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-        
+
         # Scan the file
         report = await comprehensive_analyzer.analyze_file(tmp_path)
-        
+
         # Clean up
         os.unlink(tmp_path)
-        
+
         return {
             'filename': file.filename,
             'threats': report.threats_found,
             'threat_score': report.threat_score,
             'severity_level': report.severity_level
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def generate_recommendations(threat_breakdown: Dict) -> List[str]:
+def generate_recommendations(threat_breakdown: dict) -> list[str]:
     """Generate security recommendations based on threats found"""
     recommendations = []
-    
+
     if 'static' in threat_breakdown:
         for threat in threat_breakdown['static']:
             if threat.get('attack_vector') == 'COMMAND_INJECTION':
@@ -598,18 +652,38 @@ def generate_recommendations(threat_breakdown: Dict) -> List[str]:
                 recommendations.append("Use secure credential storage (e.g., environment variables, secret managers)")
             elif threat.get('attack_vector') == 'DATA_EXFILTRATION':
                 recommendations.append("Implement network egress controls and monitoring")
-    
+
     if 'signature' in threat_breakdown:
         sig = threat_breakdown['signature']
         if sig.get('changed'):
             recommendations.append("Review tool changes and re-verify trust")
         if sig.get('status') == 'blacklisted':
             recommendations.append("Remove blacklisted tool immediately")
-    
+
     if 'policy' in threat_breakdown:
         recommendations.append("Update security policies to address violations")
-    
+
     return list(set(recommendations))  # Remove duplicates
+
+# Catch-all route for React Router (SPA) - MUST BE LAST
+@app.get("/{path:path}")
+async def catch_all(path: str):
+    """Catch-all route to serve React app for SPA routing"""
+    # Skip API routes
+    if path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+
+    # Check for built React app
+    react_build = Path(__file__).parent / "static" / "dist" / "index.html"
+    if react_build.exists():
+        return FileResponse(react_build)
+
+    # Fallback to legacy dashboard
+    html_file = Path(__file__).parent / "static" / "dashboard.html"
+    if html_file.exists():
+        return FileResponse(html_file)
+    else:
+        return HTMLResponse(content=get_dashboard_html())
 
 def get_dashboard_html():
     """Return the full dashboard HTML with enhanced reporting"""
@@ -1412,16 +1486,17 @@ def get_dashboard_html():
 </html>'''
 
 if __name__ == "__main__":
-    import uvicorn
     import argparse
     import socket
-    
+
+    import uvicorn
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='MCP Security Dashboard')
     parser.add_argument('--port', type=int, default=8080, help='Port to run on (default: 8080)')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
     args = parser.parse_args()
-    
+
     # Function to find available port
     def find_available_port(start_port=8080, max_tries=10):
         for port in range(start_port, start_port + max_tries):
@@ -1431,12 +1506,12 @@ if __name__ == "__main__":
             if result != 0:  # Port is available
                 return port
         return None
-    
+
     # Check if specified port is available, if not find another
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     result = sock.connect_ex(('127.0.0.1', args.port))
     sock.close()
-    
+
     if result == 0:  # Port is in use
         print(f"⚠️  Port {args.port} is already in use, finding available port...")
         available_port = find_available_port(args.port)
@@ -1447,8 +1522,8 @@ if __name__ == "__main__":
             print(f"❌ No available ports found between {args.port} and {args.port + 10}")
             print(f"Try specifying a different port: python3 {__file__} --port 9000")
             sys.exit(1)
-    
+
     print(f"🚀 Starting MCP Security Dashboard on http://localhost:{args.port}")
-    print(f"Press Ctrl+C to stop")
-    
+    print("Press Ctrl+C to stop")
+
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

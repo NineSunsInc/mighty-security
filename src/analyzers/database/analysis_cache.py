@@ -4,15 +4,16 @@ Analysis Cache Database
 Stores scan results, git metadata, and prevents redundant analysis
 """
 
-import sqlite3
-import json
 import hashlib
-import uuid
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field, asdict
+import json
+import sqlite3
 import subprocess
+import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
 
 @dataclass
 class RepositoryMetadata:
@@ -22,12 +23,12 @@ class RepositoryMetadata:
     latest_commit_sha: str
     latest_commit_date: str
     branch: str
-    remote_url: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
-    release_version: Optional[str] = None
+    remote_url: str | None = None
+    tags: list[str] = field(default_factory=list)
+    release_version: str | None = None
     total_commits: int = 0
-    contributors: List[str] = field(default_factory=list)
-    
+    contributors: list[str] = field(default_factory=list)
+
 @dataclass
 class AnalysisRun:
     """Single analysis run record"""
@@ -38,7 +39,7 @@ class AnalysisRun:
     scan_timestamp: str
     scan_type: str  # 'quick' or 'deep'
     llm_enabled: bool
-    
+
     # Results
     threat_level: str
     threat_score: float
@@ -46,32 +47,32 @@ class AnalysisRun:
     total_files: int
     total_threats: int
     critical_threats: int
-    
+
     # Fingerprints
     sha512_fingerprint: str
     sha3_512_fingerprint: str
     merkle_root: str
-    
+
     # Performance
     scan_duration_seconds: float
     tokens_used: int = 0
-    
+
     # Full report stored as JSON
-    full_report: Dict[str, Any] = field(default_factory=dict)
+    full_report: dict[str, Any] = field(default_factory=dict)
 
 class AnalysisCacheDB:
     """SQLite database for caching analysis results"""
-    
+
     def __init__(self, db_path: str = "analysis_cache.db"):
         self.db_path = Path(db_path)
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
         self._init_database()
-        
+
     def _init_database(self):
         """Initialize database schema"""
         cursor = self.conn.cursor()
-        
+
         # Repository metadata table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS repositories (
@@ -89,7 +90,7 @@ class AnalysisCacheDB:
                 metadata_json TEXT  -- Full metadata as JSON
             )
         """)
-        
+
         # Analysis runs table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS analysis_runs (
@@ -126,7 +127,7 @@ class AnalysisCacheDB:
                 UNIQUE(repo_url, commit_sha, scan_type, llm_enabled)
             )
         """)
-        
+
         # Individual threats table for querying
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS threats (
@@ -143,7 +144,7 @@ class AnalysisCacheDB:
                 FOREIGN KEY (run_id) REFERENCES analysis_runs(run_id)
             )
         """)
-        
+
         # File fingerprints table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS file_fingerprints (
@@ -159,31 +160,31 @@ class AnalysisCacheDB:
                 UNIQUE(run_id, file_path)
             )
         """)
-        
+
         # Create indexes for performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_runs_repo_commit 
             ON analysis_runs(repo_url, commit_sha)
         """)
-        
+
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_threats_run 
             ON threats(run_id)
         """)
-        
+
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_threats_severity 
             ON threats(severity)
         """)
-        
+
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_fingerprints_run 
             ON file_fingerprints(run_id)
         """)
-        
+
         self.conn.commit()
-    
-    def get_repository_metadata(self, repo_path: Path) -> Optional[RepositoryMetadata]:
+
+    def get_repository_metadata(self, repo_path: Path) -> RepositoryMetadata | None:
         """Extract git metadata from repository"""
         try:
             # Get current commit SHA
@@ -194,7 +195,7 @@ class AnalysisCacheDB:
                 text=True
             )
             commit_sha = result.stdout.strip() if result.returncode == 0 else None
-            
+
             # Get current branch
             result = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -203,7 +204,7 @@ class AnalysisCacheDB:
                 text=True
             )
             branch = result.stdout.strip() if result.returncode == 0 else "main"
-            
+
             # Get commit date
             result = subprocess.run(
                 ["git", "show", "-s", "--format=%ci", "HEAD"],
@@ -212,7 +213,7 @@ class AnalysisCacheDB:
                 text=True
             )
             commit_date = result.stdout.strip() if result.returncode == 0 else datetime.now().isoformat()
-            
+
             # Get remote URL
             result = subprocess.run(
                 ["git", "config", "--get", "remote.origin.url"],
@@ -221,7 +222,7 @@ class AnalysisCacheDB:
                 text=True
             )
             remote_url = result.stdout.strip() if result.returncode == 0 else None
-            
+
             # Get tags
             result = subprocess.run(
                 ["git", "tag", "--points-at", "HEAD"],
@@ -231,7 +232,7 @@ class AnalysisCacheDB:
             )
             tags = result.stdout.strip().split('\n') if result.returncode == 0 else []
             tags = [t for t in tags if t]  # Remove empty strings
-            
+
             # Get latest release tag
             result = subprocess.run(
                 ["git", "describe", "--tags", "--abbrev=0"],
@@ -240,7 +241,7 @@ class AnalysisCacheDB:
                 text=True
             )
             release_version = result.stdout.strip() if result.returncode == 0 else None
-            
+
             # Get total commit count
             result = subprocess.run(
                 ["git", "rev-list", "--count", "HEAD"],
@@ -249,7 +250,7 @@ class AnalysisCacheDB:
                 text=True
             )
             total_commits = int(result.stdout.strip()) if result.returncode == 0 else 0
-            
+
             # Get contributors (limit to top 10)
             result = subprocess.run(
                 ["git", "shortlog", "-sn", "--all", "--no-merges"],
@@ -262,7 +263,7 @@ class AnalysisCacheDB:
                 for line in result.stdout.strip().split('\n')[:10]:
                     if '\t' in line:
                         contributors.append(line.split('\t')[1])
-            
+
             # Extract repo name from remote URL or path
             repo_name = repo_path.name
             if remote_url:
@@ -270,7 +271,7 @@ class AnalysisCacheDB:
                 match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', remote_url)
                 if match:
                     repo_name = f"{match.group(1)}/{match.group(2)}"
-            
+
             return RepositoryMetadata(
                 repo_url=str(repo_path),
                 repo_name=repo_name,
@@ -283,23 +284,23 @@ class AnalysisCacheDB:
                 total_commits=total_commits,
                 contributors=contributors
             )
-            
+
         except Exception as e:
             print(f"Error extracting git metadata: {e}")
             return None
-    
+
     def check_cached_analysis(
-        self, 
-        repo_url: str, 
-        commit_sha: Optional[str] = None,
+        self,
+        repo_url: str,
+        commit_sha: str | None = None,
         scan_type: str = "deep",
         llm_enabled: bool = False,
         max_age_hours: int = 24
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Check if we have a recent cached analysis for this commit"""
-        
+
         cursor = self.conn.cursor()
-        
+
         # If no commit SHA provided, get the latest one for this repo
         if not commit_sha:
             cursor.execute("""
@@ -311,7 +312,7 @@ class AnalysisCacheDB:
                 commit_sha = row['latest_commit_sha']
             else:
                 return None
-        
+
         # Check for existing analysis
         cursor.execute("""
             SELECT * FROM analysis_runs 
@@ -323,7 +324,7 @@ class AnalysisCacheDB:
             ORDER BY scan_timestamp DESC
             LIMIT 1
         """, (repo_url, commit_sha, scan_type, llm_enabled, f'-{max_age_hours}'))
-        
+
         row = cursor.fetchone()
         if row:
             # Return the cached analysis
@@ -338,9 +339,9 @@ class AnalysisCacheDB:
                 'critical_threats': row['critical_threats'],
                 'full_report': json.loads(row['full_report']) if row['full_report'] else None
             }
-        
+
         return None
-    
+
     def save_analysis(
         self,
         repo_path: Path,
@@ -350,12 +351,12 @@ class AnalysisCacheDB:
         scan_duration: float = 0.0
     ) -> str:
         """Save analysis results to database"""
-        
+
         # Generate run ID
         run_id = hashlib.sha256(
             f"{repo_path}{datetime.now().isoformat()}".encode()
         ).hexdigest()[:16]
-        
+
         # Get repository metadata
         metadata = self.get_repository_metadata(repo_path)
         if not metadata:
@@ -367,9 +368,9 @@ class AnalysisCacheDB:
                 latest_commit_date=datetime.now().isoformat(),
                 branch="none"
             )
-        
+
         cursor = self.conn.cursor()
-        
+
         # Update or insert repository metadata
         cursor.execute("""
             INSERT OR REPLACE INTO repositories (
@@ -390,7 +391,7 @@ class AnalysisCacheDB:
             json.dumps(metadata.contributors),
             json.dumps(asdict(metadata))
         ))
-        
+
         # Count threats
         total_threats = len(report.threats_found) if hasattr(report, 'threats_found') else 0
         critical_threats = 0
@@ -401,18 +402,18 @@ class AnalysisCacheDB:
                     critical_threats += 1
                 elif severity == 'CRITICAL':
                     critical_threats += 1
-        
+
         # Calculate tokens used
         tokens_used = 0
         if hasattr(report, 'llm_analysis') and report.llm_analysis:
             tokens_used = report.llm_analysis.get('tokens_used', 0)
-        
+
         # Convert report to dict for JSON storage
         if hasattr(report, '__dict__'):
             report_dict = report.__dict__.copy()
         else:
             report_dict = asdict(report)
-        
+
         # Convert any remaining enums to strings
         def convert_enums(obj):
             if hasattr(obj, 'value'):
@@ -423,9 +424,9 @@ class AnalysisCacheDB:
                 return [convert_enums(item) for item in obj]
             else:
                 return obj
-        
+
         report_dict = convert_enums(report_dict)
-        
+
         # Insert analysis run
         cursor.execute("""
             INSERT OR REPLACE INTO analysis_runs (
@@ -456,7 +457,7 @@ class AnalysisCacheDB:
             tokens_used,
             json.dumps(report_dict, default=str)
         ))
-        
+
         # Insert individual threats for querying
         if hasattr(report, 'threats_found'):
             for threat in report.threats_found:
@@ -475,7 +476,7 @@ class AnalysisCacheDB:
                     threat.description,
                     json.dumps(threat.evidence) if hasattr(threat, 'evidence') else "{}"
                 ))
-        
+
         # Insert file fingerprints
         if hasattr(report, 'file_fingerprints'):
             for file_path, fingerprint in report.file_fingerprints.items():
@@ -491,14 +492,14 @@ class AnalysisCacheDB:
                     fingerprint.get('size', 0),
                     fingerprint.get('entropy', 0.0)
                 ))
-        
+
         self.conn.commit()
         return run_id
-    
-    def get_repository_history(self, repo_url: str) -> List[Dict[str, Any]]:
+
+    def get_repository_history(self, repo_url: str) -> list[dict[str, Any]]:
         """Get analysis history for a repository"""
         cursor = self.conn.cursor()
-        
+
         cursor.execute("""
             SELECT run_id, commit_sha, branch, scan_timestamp, scan_type,
                    llm_enabled, threat_level, threat_score, total_threats,
@@ -508,7 +509,7 @@ class AnalysisCacheDB:
             ORDER BY scan_timestamp DESC
             LIMIT 50
         """, (repo_url,))
-        
+
         history = []
         for row in cursor.fetchall():
             history.append({
@@ -524,16 +525,16 @@ class AnalysisCacheDB:
                 'critical_threats': row['critical_threats'],
                 'scan_duration': row['scan_duration_seconds']
             })
-        
+
         return history
-    
-    def get_threat_statistics(self, repo_url: Optional[str] = None) -> Dict[str, Any]:
+
+    def get_threat_statistics(self, repo_url: str | None = None) -> dict[str, Any]:
         """Get threat statistics across all or specific repository"""
         cursor = self.conn.cursor()
-        
+
         where_clause = "WHERE r.repo_url = ?" if repo_url else ""
         params = (repo_url,) if repo_url else ()
-        
+
         # Get threat distribution
         cursor.execute(f"""
             SELECT t.severity, t.attack_vector, COUNT(*) as count
@@ -543,14 +544,14 @@ class AnalysisCacheDB:
             GROUP BY t.severity, t.attack_vector
             ORDER BY count DESC
         """, params)
-        
+
         threat_distribution = {}
         for row in cursor.fetchall():
             severity = row['severity']
             if severity not in threat_distribution:
                 threat_distribution[severity] = {}
             threat_distribution[severity][row['attack_vector']] = row['count']
-        
+
         # Get top vulnerable files
         cursor.execute(f"""
             SELECT t.file_path, COUNT(*) as threat_count,
@@ -562,7 +563,7 @@ class AnalysisCacheDB:
             ORDER BY threat_count DESC
             LIMIT 10
         """, params)
-        
+
         top_vulnerable_files = []
         for row in cursor.fetchall():
             top_vulnerable_files.append({
@@ -570,7 +571,7 @@ class AnalysisCacheDB:
                 'threat_count': row['threat_count'],
                 'severities': row['severities'].split(',') if row['severities'] else []
             })
-        
+
         # Get summary stats
         cursor.execute(f"""
             SELECT 
@@ -583,9 +584,9 @@ class AnalysisCacheDB:
             FROM analysis_runs r
             {where_clause}
         """, params)
-        
+
         stats = cursor.fetchone()
-        
+
         return {
             'summary': {
                 'total_repos': stats['total_repos'],
@@ -598,61 +599,61 @@ class AnalysisCacheDB:
             'threat_distribution': threat_distribution,
             'top_vulnerable_files': top_vulnerable_files
         }
-    
+
     def cleanup_old_runs(self, days: int = 30):
         """Remove analysis runs older than specified days"""
         cursor = self.conn.cursor()
-        
+
         cutoff_date = datetime.now() - timedelta(days=days)
-        
+
         # Get runs to delete
         cursor.execute("""
             SELECT run_id FROM analysis_runs
             WHERE datetime(scan_timestamp) < ?
         """, (cutoff_date.isoformat(),))
-        
+
         run_ids = [row['run_id'] for row in cursor.fetchall()]
-        
+
         if run_ids:
             # Delete threats
             cursor.execute("""
                 DELETE FROM threats 
                 WHERE run_id IN ({})
             """.format(','.join('?' * len(run_ids))), run_ids)
-            
+
             # Delete fingerprints
             cursor.execute("""
                 DELETE FROM file_fingerprints
                 WHERE run_id IN ({})
             """.format(','.join('?' * len(run_ids))), run_ids)
-            
+
             # Delete runs
             cursor.execute("""
                 DELETE FROM analysis_runs
                 WHERE run_id IN ({})
             """.format(','.join('?' * len(run_ids))), run_ids)
-            
+
             self.conn.commit()
-            
+
         return len(run_ids)
-    
-    def export_to_json(self, run_id: str) -> Optional[Dict[str, Any]]:
+
+    def export_to_json(self, run_id: str) -> dict[str, Any] | None:
         """Export a specific run to JSON format"""
         cursor = self.conn.cursor()
-        
+
         cursor.execute("""
             SELECT * FROM analysis_runs WHERE run_id = ?
         """, (run_id,))
-        
+
         run = cursor.fetchone()
         if not run:
             return None
-        
+
         # Get threats
         cursor.execute("""
             SELECT * FROM threats WHERE run_id = ?
         """, (run_id,))
-        
+
         threats = []
         for row in cursor.fetchall():
             threats.append({
@@ -664,12 +665,12 @@ class AnalysisCacheDB:
                 'description': row['description'],
                 'evidence': json.loads(row['evidence']) if row['evidence'] else []
             })
-        
+
         # Get fingerprints
         cursor.execute("""
             SELECT * FROM file_fingerprints WHERE run_id = ?
         """, (run_id,))
-        
+
         fingerprints = {}
         for row in cursor.fetchall():
             fingerprints[row['file_path']] = {
@@ -678,7 +679,7 @@ class AnalysisCacheDB:
                 'size': row['file_size'],
                 'entropy': row['entropy']
             }
-        
+
         return {
             'run_id': run['run_id'],
             'repo_url': run['repo_url'],
@@ -699,16 +700,15 @@ class AnalysisCacheDB:
             'file_fingerprints': fingerprints,
             'full_report': json.loads(run['full_report']) if run['full_report'] else None
         }
-    
-    def store_analysis_run(self, repo_url: str, scan_type: str, threat_level: str, 
+
+    def store_analysis_run(self, repo_url: str, scan_type: str, threat_level: str,
                            threat_score: float, total_threats: int) -> str:
         """Store a new analysis run and return run_id"""
-        import uuid
         from datetime import datetime
-        
+
         run_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
-        
+
         cursor.execute("""
             INSERT OR REPLACE INTO analysis_runs (
                 run_id, repo_url, commit_sha, branch, scan_timestamp, scan_type,
@@ -721,34 +721,34 @@ class AnalysisCacheDB:
             False, threat_level, threat_score, 0.8, 0, total_threats, 0,
             '', '', '', 0, 0, '{}'
         ))
-        
+
         self.conn.commit()
         return run_id
-    
-    def store_repository(self, repo_url: str, repo_name: str, latest_commit_sha: str, 
+
+    def store_repository(self, repo_url: str, repo_name: str, latest_commit_sha: str,
                         scan_timestamp):
         """Store repository metadata"""
         cursor = self.conn.cursor()
-        
+
         cursor.execute("""
             INSERT OR REPLACE INTO repositories (
                 repo_url, repo_name, latest_commit_sha, latest_commit_date, 
                 branch, last_updated
             ) VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            repo_url, repo_name, latest_commit_sha, 
+            repo_url, repo_name, latest_commit_sha,
             scan_timestamp.isoformat() if hasattr(scan_timestamp, 'isoformat') else scan_timestamp,
             'main', scan_timestamp.isoformat() if hasattr(scan_timestamp, 'isoformat') else scan_timestamp
         ))
-        
+
         self.conn.commit()
-    
-    def store_threat(self, run_id: str, attack_vector: str, severity: str, 
+
+    def store_threat(self, run_id: str, attack_vector: str, severity: str,
                     confidence: float, file_path: str, line_numbers: list,
                     description: str, evidence: list):
         """Store individual threat details"""
         cursor = self.conn.cursor()
-        
+
         cursor.execute("""
             INSERT INTO threats (
                 run_id, attack_vector, severity, confidence,
@@ -759,9 +759,9 @@ class AnalysisCacheDB:
             file_path, json.dumps(line_numbers) if line_numbers else '[]',
             description, json.dumps(evidence) if evidence else '[]'
         ))
-        
+
         self.conn.commit()
-    
+
     def close(self):
         """Close database connection"""
         self.conn.close()

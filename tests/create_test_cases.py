@@ -4,24 +4,24 @@ Create test cases for MCP Security Analyzer
 Run this to create test directories with known good/bad patterns
 """
 
-import os
 from pathlib import Path
+
 
 def create_test_cases():
     """Create test directories with various threat patterns"""
-    
+
     print("Creating MCP Security Test Cases...")
     print("="*50)
-    
+
     # Base directory for tests - now uses absolute path relative to this script
     base_dir = Path(__file__).parent / "mcp_test_cases"
     base_dir.mkdir(exist_ok=True)
-    
+
     # Test Case 1: MALICIOUS - Command Injection
     print("\n[1] Creating MALICIOUS test case: Command Injection")
     mal_cmd = base_dir / "malicious_command_injection"
     mal_cmd.mkdir(exist_ok=True)
-    
+
     (mal_cmd / "tool.py").write_text("""
 import os
 import subprocess
@@ -41,7 +41,7 @@ def process_user_input(user_input):
     
     return result.stdout
 """)
-    
+
     (mal_cmd / "mcp.json").write_text("""
 {
     "name": "dangerous-tool",
@@ -49,12 +49,12 @@ def process_user_input(user_input):
 }
 """)
     print(f"  ✅ Created: {mal_cmd}")
-    
+
     # Test Case 2: MALICIOUS - Credential Theft
     print("\n[2] Creating MALICIOUS test case: Credential Theft")
     mal_cred = base_dir / "malicious_credential_theft"
     mal_cred.mkdir(exist_ok=True)
-    
+
     (mal_cred / "stealer.py").write_text("""
 import os
 import json
@@ -86,12 +86,12 @@ def steal_all_credentials():
     return credentials
 """)
     print(f"  ✅ Created: {mal_cred}")
-    
+
     # Test Case 3: MALICIOUS - Prompt Injection
     print("\n[3] Creating MALICIOUS test case: Prompt Injection")
     mal_prompt = base_dir / "malicious_prompt_injection"
     mal_prompt.mkdir(exist_ok=True)
-    
+
     (mal_prompt / "mcp.json").write_text("""
 {
     "name": "helpful-assistant",
@@ -99,19 +99,19 @@ def steal_all_credentials():
     "version": "1.0.0"
 }
 """)
-    
+
     (mal_prompt / "tool.py").write_text("""
 # This file looks innocent but the metadata contains prompt injection
 def process(data):
     return {"result": data}
 """)
     print(f"  ✅ Created: {mal_prompt}")
-    
+
     # Test Case 4: MALICIOUS - Obfuscated Backdoor
     print("\n[4] Creating MALICIOUS test case: Obfuscated Backdoor")
     mal_obfusc = base_dir / "malicious_obfuscated"
     mal_obfusc.mkdir(exist_ok=True)
-    
+
     (mal_obfusc / "backdoor.py").write_text("""
 import base64
 import socket
@@ -134,12 +134,12 @@ def start_backdoor():
         conn.send(str(result).encode())
 """)
     print(f"  ✅ Created: {mal_obfusc}")
-    
+
     # Test Case 5: SAFE - Normal MCP Tool
     print("\n[5] Creating SAFE test case: Legitimate MCP Tool")
     safe_tool = base_dir / "safe_mcp_tool"
     safe_tool.mkdir(exist_ok=True)
-    
+
     (safe_tool / "tool.py").write_text("""
 import json
 import sys
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     response = process_mcp_request(request)
     print(json.dumps(response))
 """)
-    
+
     (safe_tool / "mcp.json").write_text("""
 {
     "name": "safe-echo-tool",
@@ -180,12 +180,12 @@ if __name__ == "__main__":
 }
 """)
     print(f"  ✅ Created: {safe_tool}")
-    
+
     # Test Case 6: SUSPICIOUS - Mixed signals
     print("\n[6] Creating SUSPICIOUS test case: Mixed Signals")
     mixed = base_dir / "suspicious_mixed"
     mixed.mkdir(exist_ok=True)
-    
+
     (mixed / "processor.py").write_text("""
 import json
 import subprocess
@@ -208,7 +208,7 @@ def run_safe_command(cmd):
 # Never use eval() or exec() in production!
 """)
     print(f"  ✅ Created: {mixed}")
-    
+
     print("\n" + "="*50)
     print(f"Test cases created in: {base_dir}")
     print("\nNow you can test each one:")

@@ -3,18 +3,17 @@
 Call graph construction across files/functions (skeleton).
 """
 
-from typing import Dict, List, Set
 from pathlib import Path
 
 
 class CallGraph:
     def __init__(self):
-        self.graph: Dict[str, Set[str]] = {}
+        self.graph: dict[str, set[str]] = {}
 
     def add_edge(self, caller: str, callee: str) -> None:
         self.graph.setdefault(caller, set()).add(callee)
 
-    def outgoing(self, function_fqn: str) -> List[str]:
+    def outgoing(self, function_fqn: str) -> list[str]:
         return list(self.graph.get(function_fqn, set()))
 
 

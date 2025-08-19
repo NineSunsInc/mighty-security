@@ -21,12 +21,12 @@ def get_injector():
     from .injector import GatewayInjector
     return GatewayInjector
 
-from .session import SessionManager, SessionNode, Session
 from .activity_logger import ActivityLogger, OutputFormat
+from .session import Session, SessionManager, SessionNode
 
 __all__ = [
     'get_proxy_server',
-    'get_gateway', 
+    'get_gateway',
     'get_injector',
     'SessionManager',
     'SessionNode',

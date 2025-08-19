@@ -5,8 +5,9 @@ Comprehensive, reusable prompts for detecting MCP vulnerabilities
 Based on known attack vectors from PromptHub article
 """
 
-from typing import Dict, Any
 from enum import Enum
+from typing import Any
+
 
 class ThreatCategory(Enum):
     """MCP threat categories from PromptHub article"""
@@ -23,7 +24,7 @@ class ThreatCategory(Enum):
 
 class MCPSecurityPrompts:
     """Centralized prompt templates for MCP security analysis"""
-    
+
     @staticmethod
     def get_base_system_prompt() -> str:
         """Base system prompt for all MCP security analysis"""
@@ -114,7 +115,7 @@ IMPORTANT: Be concise but thorough. Prioritize findings by actual exploitability
     @staticmethod
     def get_threat_specific_prompt(category: ThreatCategory) -> str:
         """Get specialized prompt for specific threat category"""
-        
+
         prompts = {
             ThreatCategory.TOOL_POISONING: """
 FOCUS: Tool Poisoning & Silent Redefinition Attacks
@@ -322,7 +323,7 @@ Look for:
    - Polymorphic patterns
    - Encrypted strings""",
         }
-        
+
         return prompts.get(category, "")
 
     @staticmethod
@@ -330,18 +331,18 @@ Look for:
         code: str,
         file_path: str,
         threat_category: ThreatCategory = None,
-        context: Dict[str, Any] = None
+        context: dict[str, Any] = None
     ) -> str:
         """Build complete analysis prompt for code snippet"""
-        
+
         prompt_parts = []
-        
+
         # Add threat-specific focus if provided
         if threat_category:
             specific = MCPSecurityPrompts.get_threat_specific_prompt(threat_category)
             if specific:
                 prompt_parts.append(specific)
-        
+
         # Add context if available
         if context:
             context_str = f"""
@@ -354,7 +355,7 @@ CONTEXT INFORMATION:
 - Static Threats Found: {context.get('static_threat_count', 0)}
 """
             prompt_parts.append(context_str)
-        
+
         # Add the code to analyze
         prompt_parts.append(f"""
 CODE TO ANALYZE:
@@ -391,7 +392,7 @@ JSON_END
 
 Focus on real, exploitable vulnerabilities. Avoid false positives.
 Strictly avoid suggesting new dependencies or package installation commands in remediation or summary.""")
-        
+
         return "\n".join(prompt_parts)
 
     @staticmethod
@@ -400,7 +401,7 @@ Strictly avoid suggesting new dependencies or package installation commands in r
         threat_focus: list = None
     ) -> str:
         """Build prompt for analyzing multiple code snippets efficiently"""
-        
+
         prompt = """Analyze these code snippets for MCP security vulnerabilities.
 
 SNIPPETS TO ANALYZE:
@@ -408,7 +409,7 @@ SNIPPETS TO ANALYZE:
         for i, snippet in enumerate(code_snippets):
             prompt += f"\n--- SNIPPET {i+1} ({snippet.get('file', 'unknown')}) ---\n"
             prompt += f"```\n{snippet.get('code', '')}\n```\n"
-        
+
         prompt += """
 For each snippet, identify HIGH/CRITICAL vulnerabilities related to:
 - Tool poisoning/redefinition
@@ -429,5 +430,5 @@ Return ONLY a single JSON object keyed by the exact file path of each snippet. T
 
 Begin with JSON_START and end with JSON_END on their own lines. Do not include any other text.
 """
-        
+
         return prompt

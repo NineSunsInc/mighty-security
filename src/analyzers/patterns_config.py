@@ -3,9 +3,10 @@ Unified pattern configuration for MCP Security Analyzer
 Single source of truth for all detection patterns to maintain DRY principle
 """
 
-from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
 
 class PatternType(Enum):
     """Types of pattern detection"""
@@ -28,11 +29,11 @@ class DetectionPattern:
 
 class UnifiedPatterns:
     """Centralized pattern management for DRY compliance"""
-    
+
     # Credential-related paths that appear in both patterns.py and scan_config.json
     CREDENTIAL_PATHS = [
         ".aws/credentials",
-        ".aws/config", 
+        ".aws/config",
         ".ssh/id_rsa",
         ".ssh/id_dsa",
         ".ssh/id_ecdsa",
@@ -51,26 +52,26 @@ class UnifiedPatterns:
         "secrets.yml",
         "secrets.yaml",
     ]
-    
+
     # Security tool indicators (used in context detection)
     SECURITY_TOOL_INDICATORS = {
         "imports": ["ast", "inspect", "bandit", "pylint", "re", "hashlib", "security"],
-        "class_patterns": ["Analyzer", "Scanner", "Detector", "Auditor", "Hook", 
+        "class_patterns": ["Analyzer", "Scanner", "Detector", "Auditor", "Hook",
                           "SecurityHook", "Proxy", "Monitor", "Guard", "Validator"],
-        "function_patterns": ["detect_", "scan_", "analyze_", "audit_", "_detect_", 
+        "function_patterns": ["detect_", "scan_", "analyze_", "audit_", "_detect_",
                              "_sanitize_", "validate_", "check_", "_check_", "inspect_"],
-        "path_patterns": ["/hooks/", "/analyzers/", "/security/", "/scanners/", 
+        "path_patterns": ["/hooks/", "/analyzers/", "/security/", "/scanners/",
                          "/detectors/", "/validators/", "/guards/"],
         # Keywords that indicate security pattern definitions
-        "pattern_keywords": ["pattern", "patterns", "regex", "detection", "threat", 
-                           "malicious", "injection_patterns", "dangerous_patterns", 
+        "pattern_keywords": ["pattern", "patterns", "regex", "detection", "threat",
+                           "malicious", "injection_patterns", "dangerous_patterns",
                            "sanitizer", "sanitizers", "vulnerability", "exploit"]
     }
-    
+
     # Prompt injection patterns (commonly flagged in security tools)
     PROMPT_INJECTION_STRINGS = [
         "ignore previous instructions",
-        "ignore all previous instructions", 
+        "ignore all previous instructions",
         "disregard safety guidelines",
         "disregard all prior",
         "system: you are now",
@@ -90,18 +91,18 @@ class UnifiedPatterns:
         "forget this conversation",
         "clear all logs history",
     ]
-    
+
     # Test/Example indicators
     TEST_INDICATORS = {
         "path_patterns": ["/test/", "/tests/", "_test.py", "test_", "/test_"],
         "content_patterns": ["import pytest", "import unittest", "def test_", "class Test"]
     }
-    
+
     EXAMPLE_INDICATORS = {
         "path_patterns": ["/example", "/examples/", "/demo", "/demos/", "_example.py", "_demo.py"],
         "content_patterns": ["# Example:", "# Demo:", "if __name__ == '__main__':", "# Sample:"]
     }
-    
+
     # File exclusion patterns
     EXCLUDE_PATTERNS = {
         "common": [
@@ -135,9 +136,9 @@ class UnifiedPatterns:
             "**/malicious_*/**"
         ]
     }
-    
+
     @classmethod
-    def get_all_credential_patterns(cls) -> List[str]:
+    def get_all_credential_patterns(cls) -> list[str]:
         """Get all credential-related patterns as regex patterns"""
         patterns = []
         for path in cls.CREDENTIAL_PATHS:
@@ -147,7 +148,7 @@ class UnifiedPatterns:
             patterns.append(rf"open\s*\([^)]*['\"]{{0,1}}{escaped}")
             patterns.append(rf"read.*['\"]{{0,1}}{escaped}")
         return patterns
-    
+
     @classmethod
     def is_security_pattern_definition(cls, line: str, file_context: Any = None) -> bool:
         """
@@ -156,82 +157,82 @@ class UnifiedPatterns:
         """
         line_lower = line.lower()
         line_stripped = line.strip()
-        
+
         # Check for pattern definition keywords
         for keyword in cls.SECURITY_TOOL_INDICATORS["pattern_keywords"]:
             if keyword in line_lower:
                 return True
-        
+
         # Check if it's defining patterns in a list (common in security tools)
         if line_stripped.startswith(("r'", 'r"', "'", '"')) and (
             line_stripped.endswith((",", ",  #")) or ",  #" in line_stripped
         ):
             return True
-        
+
         # Check if it's in a test case definition
         if "'input':" in line or '"input":' in line:
             return True
-        
+
         # Check if it's in a patterns array/list
         if "patterns = [" in line_lower or "patterns': [" in line_lower:
             return True
-        
+
         # Check if line contains regex pattern indicators
         if any(indicator in line for indicator in [r"\\.", r"\\/", r"\\\\", r"\s*", r"\d+", r"[^", r".*"]):
             # It's likely a regex pattern definition
             if line_stripped.startswith(("'", '"', "r'", 'r"')):
                 return True
-        
+
         # Check if it's in a string assignment (pattern definition)
         if "=" in line and any(pattern in line for pattern in ['"', "'"]):
             # Check if it's assigning to a pattern-related variable
             var_part = line.split("=")[0].strip().lower()
             if any(keyword in var_part for keyword in ["pattern", "regex", "detection", "rule", "test"]):
                 return True
-        
+
         # Check if it's in a detection function
         if file_context and hasattr(file_context, 'is_security_tool') and file_context.is_security_tool:
             # More lenient for security tools
             if any(pattern in line_lower for pattern in ["def detect_", "def _detect_", "def check_", "def scan_", "def test_"]):
                 return True
-        
+
         return False
-    
+
     @classmethod
-    def should_skip_pattern_in_security_tool(cls, line: str, pattern_match: str, 
+    def should_skip_pattern_in_security_tool(cls, line: str, pattern_match: str,
                                             file_context: Any = None) -> bool:
         """
         Determine if a pattern match should be skipped in a security tool context
         """
         if not file_context or not hasattr(file_context, 'is_security_tool'):
             return False
-        
+
         if not file_context.is_security_tool:
             return False
-        
+
         # Check if this is a pattern definition
         if cls.is_security_pattern_definition(line, file_context):
             return True
-        
+
         # Check if the matched pattern is in a comment explaining detection
         if line.strip().startswith("#") and "detect" in line.lower():
             return True
-        
+
         # Check if it's in a docstring
         if '"""' in line or "'''" in line:
             return True
-        
+
         return False
-    
+
     @classmethod
-    def get_scan_profile_config(cls, profile: str = "production") -> Dict:
+    def get_scan_profile_config(cls, profile: str = "production") -> dict:
         """Get configuration for a specific scan profile"""
         profiles = {
             "production": {
                 "description": "Production scanning - excludes test/example code",
-                "exclude_paths": cls.EXCLUDE_PATTERNS["common"] + 
-                               cls.EXCLUDE_PATTERNS["test"] + 
-                               cls.EXCLUDE_PATTERNS["example"] + 
+                "exclude_paths": cls.EXCLUDE_PATTERNS["common"] +
+                               cls.EXCLUDE_PATTERNS["test"] +
+                               cls.EXCLUDE_PATTERNS["example"] +
                                cls.EXCLUDE_PATTERNS["malicious_test"],
                 "severity_adjustments": {
                     "test_code": "ignore",
@@ -243,7 +244,7 @@ class UnifiedPatterns:
             },
             "development": {
                 "description": "Development scanning - includes test code with adjusted severity",
-                "exclude_paths": cls.EXCLUDE_PATTERNS["common"] + 
+                "exclude_paths": cls.EXCLUDE_PATTERNS["common"] +
                                cls.EXCLUDE_PATTERNS["malicious_test"],
                 "severity_adjustments": {
                     "test_code": "low",
@@ -266,9 +267,9 @@ class UnifiedPatterns:
             }
         }
         return profiles.get(profile, profiles["production"])
-    
+
     @classmethod
-    def get_context_detection_config(cls) -> Dict:
+    def get_context_detection_config(cls) -> dict:
         """Get context detection configuration"""
         return {
             "test_indicators": cls.TEST_INDICATORS,
@@ -276,7 +277,7 @@ class UnifiedPatterns:
             "security_tool_indicators": cls.SECURITY_TOOL_INDICATORS,
             "generated_indicators": {
                 "path_patterns": ["__pycache__", ".pyc", "generated/", "build/", "dist/"],
-                "content_patterns": ["# Generated by", "# Auto-generated", "DO NOT EDIT", 
+                "content_patterns": ["# Generated by", "# Auto-generated", "DO NOT EDIT",
                                    "This file is automatically generated"]
             }
         }

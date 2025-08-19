@@ -3,8 +3,6 @@ Security Model Ensemble (renamed from src/ml/model_integration.py)
 Provides analyze(repo_path, threats, data_flows) compatible API
 """
 
-import numpy as np
-from typing import Dict, List, Tuple, Optional, Any
 
 
 class ModelEnsemble:
@@ -18,7 +16,7 @@ class ModelEnsemble:
         except Exception:
             self._legacy = None
 
-    def analyze(self, repo_path, threats, data_flows) -> Tuple[float, List[str]]:
+    def analyze(self, repo_path, threats, data_flows) -> tuple[float, list[str]]:
         """Return (ml_score, explanations) compatible with analyzer."""
         # Prefer legacy ensemble if available for richer signals
         if self._legacy and hasattr(self._legacy, "analyze_comprehensive"):
@@ -38,8 +36,8 @@ class ModelEnsemble:
                 pass
 
         # Fallback heuristic if no legacy ensemble
-        critical = sum(1 for t in threats if getattr(t, 'severity', None) and getattr(t, 'severity').value == 'CRITICAL')
-        high = sum(1 for t in threats if getattr(t, 'severity', None) and getattr(t, 'severity').value == 'HIGH')
+        critical = sum(1 for t in threats if getattr(t, 'severity', None) and t.severity.value == 'CRITICAL')
+        high = sum(1 for t in threats if getattr(t, 'severity', None) and t.severity.value == 'HIGH')
         tainted = sum(1 for f in data_flows if getattr(f, 'is_tainted', False))
 
         score = 0.0

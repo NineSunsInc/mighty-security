@@ -5,13 +5,12 @@ Pre-fetches repository information without cloning
 """
 
 import re
-import json
 import subprocess
-from typing import Dict, Optional, Any, Tuple
-from pathlib import Path
-from datetime import datetime
-import requests
 from dataclasses import dataclass
+from typing import Any
+
+import requests
+
 
 @dataclass
 class GitHubRepoInfo:
@@ -26,20 +25,20 @@ class GitHubRepoInfo:
     latest_commit_author: str
     size_kb: int
     language: str
-    languages: Dict[str, int]
+    languages: dict[str, int]
     stars: int
     forks: int
     open_issues: int
     created_at: str
     updated_at: str
     has_releases: bool
-    latest_release: Optional[str]
+    latest_release: str | None
     topics: list
     is_fork: bool
     is_archived: bool
     description: str
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             'owner': self.owner,
@@ -72,8 +71,8 @@ class GitHubRepoInfo:
 
 class GitHubMetadataExtractor:
     """Extract GitHub repository metadata without cloning"""
-    
-    def __init__(self, github_token: Optional[str] = None):
+
+    def __init__(self, github_token: str | None = None):
         """
         Initialize with optional GitHub token for API access
         Token increases rate limits from 60 to 5000 requests per hour
@@ -85,30 +84,30 @@ class GitHubMetadataExtractor:
         }
         if github_token:
             self.headers['Authorization'] = f'token {github_token}'
-    
-    def extract_from_url(self, repo_url: str) -> Optional[GitHubRepoInfo]:
+
+    def extract_from_url(self, repo_url: str) -> GitHubRepoInfo | None:
         """Extract metadata from GitHub URL without cloning"""
-        
+
         # Parse GitHub URL
         owner, repo = self._parse_github_url(repo_url)
         if not owner or not repo:
             return None
-        
+
         try:
             # Get repository info
             repo_data = self._get_repo_info(owner, repo)
             if not repo_data:
                 return None
-            
+
             # Get latest commit info
             commit_data = self._get_latest_commit(owner, repo, repo_data.get('default_branch', 'main'))
-            
+
             # Get languages
             languages = self._get_languages(owner, repo)
-            
+
             # Get latest release
             latest_release = self._get_latest_release(owner, repo)
-            
+
             # Build metadata object
             return GitHubRepoInfo(
                 owner=owner,
@@ -134,12 +133,12 @@ class GitHubMetadataExtractor:
                 is_archived=repo_data.get('archived', False),
                 description=repo_data.get('description', '')
             )
-            
+
         except Exception as e:
             print(f"Error extracting GitHub metadata: {e}")
             return None
-    
-    def check_using_git_ls_remote(self, repo_url: str) -> Optional[Dict[str, str]]:
+
+    def check_using_git_ls_remote(self, repo_url: str) -> dict[str, str] | None:
         """
         Quick check using git ls-remote (doesn't require API token)
         Returns latest commit SHA and refs without cloning
@@ -152,11 +151,11 @@ class GitHubMetadataExtractor:
                 text=True,
                 timeout=10
             )
-            
+
             if result.returncode == 0 and result.stdout:
                 # Parse the output (format: SHA\tHEAD)
                 sha = result.stdout.strip().split('\t')[0]
-                
+
                 # Get all refs for more info
                 result_all = subprocess.run(
                     ["git", "ls-remote", "--heads", "--tags", repo_url],
@@ -164,67 +163,67 @@ class GitHubMetadataExtractor:
                     text=True,
                     timeout=10
                 )
-                
+
                 refs = {}
                 branches = []
                 tags = []
-                
+
                 if result_all.returncode == 0:
                     for line in result_all.stdout.strip().split('\n'):
                         if line:
                             sha_ref, ref = line.split('\t')
                             refs[ref] = sha_ref
-                            
+
                             if ref.startswith('refs/heads/'):
                                 branches.append(ref.replace('refs/heads/', ''))
                             elif ref.startswith('refs/tags/'):
                                 tags.append(ref.replace('refs/tags/', ''))
-                
+
                 return {
                     'latest_commit_sha': sha,
                     'branches': branches,
                     'tags': tags,
                     'refs': refs
                 }
-                
+
         except Exception as e:
             print(f"git ls-remote failed: {e}")
-        
+
         return None
-    
-    def _parse_github_url(self, url: str) -> Tuple[Optional[str], Optional[str]]:
+
+    def _parse_github_url(self, url: str) -> tuple[str | None, str | None]:
         """Parse GitHub URL to extract owner and repo name"""
         patterns = [
             r'github\.com[:/]([^/]+)/([^/.]+)',  # HTTPS or SSH
             r'github\.com/([^/]+)/([^/.]+)',      # Plain HTTPS
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, url)
             if match:
                 owner = match.group(1)
                 repo = match.group(2).replace('.git', '')
                 return owner, repo
-        
+
         return None, None
-    
-    def _get_repo_info(self, owner: str, repo: str) -> Optional[Dict]:
+
+    def _get_repo_info(self, owner: str, repo: str) -> dict | None:
         """Get repository information from GitHub API"""
         url = f"{self.api_base}/repos/{owner}/{repo}"
-        
+
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             if response.status_code == 200:
                 return response.json()
         except Exception as e:
             print(f"Failed to get repo info: {e}")
-        
+
         return None
-    
-    def _get_latest_commit(self, owner: str, repo: str, branch: str) -> Dict[str, str]:
+
+    def _get_latest_commit(self, owner: str, repo: str, branch: str) -> dict[str, str]:
         """Get latest commit information"""
         url = f"{self.api_base}/repos/{owner}/{repo}/commits/{branch}"
-        
+
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             if response.status_code == 200:
@@ -237,26 +236,26 @@ class GitHubMetadataExtractor:
                 }
         except Exception:
             pass
-        
+
         return {}
-    
-    def _get_languages(self, owner: str, repo: str) -> Dict[str, int]:
+
+    def _get_languages(self, owner: str, repo: str) -> dict[str, int]:
         """Get repository languages"""
         url = f"{self.api_base}/repos/{owner}/{repo}/languages"
-        
+
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             if response.status_code == 200:
                 return response.json()
         except Exception:
             pass
-        
+
         return {}
-    
-    def _get_latest_release(self, owner: str, repo: str) -> Optional[str]:
+
+    def _get_latest_release(self, owner: str, repo: str) -> str | None:
         """Get latest release tag"""
         url = f"{self.api_base}/repos/{owner}/{repo}/releases/latest"
-        
+
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             if response.status_code == 200:
@@ -264,45 +263,45 @@ class GitHubMetadataExtractor:
                 return data.get('tag_name')
         except Exception:
             pass
-        
+
         return None
 
 class CacheAwareAnalyzer:
     """Analyzer that checks cache before cloning"""
-    
+
     def __init__(self, cache_db):
         self.cache_db = cache_db
         self.metadata_extractor = GitHubMetadataExtractor()
-    
-    def should_analyze(self, repo_url: str, force: bool = False) -> Tuple[bool, Optional[Dict]]:
+
+    def should_analyze(self, repo_url: str, force: bool = False) -> tuple[bool, dict | None]:
         """
         Check if repository needs analysis
         Returns (should_analyze, metadata)
         """
         if force:
             return True, None
-        
+
         # First, get quick metadata without cloning
         print(f"Checking repository metadata for {repo_url}...")
-        
+
         # Try git ls-remote first (faster, no API limits)
         git_info = self.metadata_extractor.check_using_git_ls_remote(repo_url)
-        
+
         if git_info:
             latest_sha = git_info['latest_commit_sha']
-            
+
             # Check if we have this SHA in cache
             cached = self.cache_db.check_cached_analysis(
                 repo_url=repo_url,
                 commit_sha=latest_sha,
                 max_age_hours=24
             )
-            
+
             if cached:
                 print(f"✓ Found cached analysis for commit {latest_sha[:8]}")
                 print(f"  Last scanned: {cached['scan_timestamp']}")
                 print(f"  Threat level: {cached['threat_level']}")
-                print(f"  Use --no-cache to force rescan")
+                print("  Use --no-cache to force rescan")
                 return False, {
                     'cached': True,
                     'commit_sha': latest_sha,
@@ -318,7 +317,7 @@ class CacheAwareAnalyzer:
                     'branches': git_info.get('branches', []),
                     'tags': git_info.get('tags', [])
                 }
-        
+
         # Fallback to API if git ls-remote fails
         github_info = self.metadata_extractor.extract_from_url(repo_url)
         if github_info:
@@ -328,19 +327,19 @@ class CacheAwareAnalyzer:
                 commit_sha=github_info.latest_commit_sha,
                 max_age_hours=24
             )
-            
+
             if cached:
-                print(f"✓ Found cached analysis")
+                print("✓ Found cached analysis")
                 return False, {
                     'cached': True,
                     **github_info.to_dict()
                 }
             else:
-                print(f"✗ No cached analysis, proceeding with scan")
+                print("✗ No cached analysis, proceeding with scan")
                 return True, {
                     'cached': False,
                     **github_info.to_dict()
                 }
-        
+
         # If we can't get metadata, proceed with analysis
         return True, None

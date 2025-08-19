@@ -10,9 +10,9 @@ Template-based guardrail system for security patterns:
 """
 
 import json
-from typing import Dict, List, Optional, Any
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -21,8 +21,8 @@ class PolicyTemplate:
     name: str
     description: str
     content: str
-    variables: List[str]
-    default_values: Dict[str, Any]
+    variables: list[str]
+    default_values: dict[str, Any]
     category: str
     severity: str
 
@@ -37,7 +37,7 @@ class GuardrailTemplate:
     - Category-based organization
     - Dynamic template generation
     """
-    
+
     # Built-in templates
     TEMPLATES = {
         # Secrets Detection
@@ -54,7 +54,7 @@ BLOCK IF:
             category='data_protection',
             severity='critical'
         ),
-        
+
         # PII Detection
         'pii': PolicyTemplate(
             name='pii',
@@ -70,7 +70,7 @@ BLOCK IF:
             category='data_protection',
             severity='high'
         ),
-        
+
         # Command Injection
         'command_injection': PolicyTemplate(
             name='command_injection',
@@ -85,7 +85,7 @@ BLOCK IF:
             category='injection',
             severity='critical'
         ),
-        
+
         # Path Traversal
         'path_traversal': PolicyTemplate(
             name='path_traversal',
@@ -101,7 +101,7 @@ BLOCK IF:
             category='injection',
             severity='high'
         ),
-        
+
         # Network Exfiltration
         'network_exfiltration': PolicyTemplate(
             name='network_exfiltration',
@@ -120,7 +120,7 @@ BLOCK IF:
             category='exfiltration',
             severity='high'
         ),
-        
+
         # File System Access
         'filesystem_access': PolicyTemplate(
             name='filesystem_access',
@@ -138,7 +138,7 @@ BLOCK IF:
             category='access_control',
             severity='medium'
         ),
-        
+
         # Environment Variable Access
         'env_access': PolicyTemplate(
             name='env_access',
@@ -160,7 +160,7 @@ BLOCK IF:
             category='access_control',
             severity='high'
         ),
-        
+
         # Tool Disable
         'disable_tool': PolicyTemplate(
             name='disable_tool',
@@ -174,7 +174,7 @@ BLOCK IF:
             category='access_control',
             severity='varies'
         ),
-        
+
         # Rate Limiting
         'rate_limit': PolicyTemplate(
             name='rate_limit',
@@ -189,7 +189,7 @@ BLOCK IF:
             category='rate_limiting',
             severity='low'
         ),
-        
+
         # Modification Example
         'sanitize_output': PolicyTemplate(
             name='sanitize_output',
@@ -206,7 +206,7 @@ THEN:
             category='data_protection',
             severity='medium'
         ),
-        
+
         # Environment File Protection
         'env_file_protection': PolicyTemplate(
             name='env_file_protection',
@@ -221,7 +221,7 @@ BLOCK IF:
             category='data_protection',
             severity='critical'
         ),
-        
+
         # Environment Commands Protection
         'env_command_protection': PolicyTemplate(
             name='env_command_protection',
@@ -235,7 +235,7 @@ BLOCK IF:
             category='data_protection',
             severity='high'
         ),
-        
+
         # Bash Environment Protection
         'bash_env_protection': PolicyTemplate(
             name='bash_env_protection',
@@ -250,7 +250,7 @@ BLOCK IF:
             category='data_protection',
             severity='high'
         ),
-        
+
         # Environment Variable Redaction
         'env_var_redaction': PolicyTemplate(
             name='env_var_redaction',
@@ -268,8 +268,8 @@ THEN:
             severity='high'
         )
     }
-    
-    def __init__(self, custom_templates_dir: Optional[str] = None):
+
+    def __init__(self, custom_templates_dir: str | None = None):
         """
         Initialize template system.
         
@@ -277,23 +277,23 @@ THEN:
             custom_templates_dir: Directory with custom templates
         """
         self.templates = self.TEMPLATES.copy()
-        
+
         if custom_templates_dir:
             self._load_custom_templates(custom_templates_dir)
-    
+
     def _load_custom_templates(self, directory: str):
         """Load custom templates from directory"""
-        
+
         template_dir = Path(directory)
         if not template_dir.exists():
             return
-        
+
         for file_path in template_dir.glob('*.yaml'):
             try:
                 import yaml
                 with open(file_path) as f:
                     data = yaml.safe_load(f)
-                
+
                 template = PolicyTemplate(
                     name=data['name'],
                     description=data.get('description', ''),
@@ -303,13 +303,13 @@ THEN:
                     category=data.get('category', 'custom'),
                     severity=data.get('severity', 'medium')
                 )
-                
+
                 self.templates[template.name] = template
-                
+
             except Exception as e:
                 print(f"Failed to load template {file_path}: {e}")
-    
-    def render(self, name: str, variables: Optional[Dict] = None) -> str:
+
+    def render(self, name: str, variables: dict | None = None) -> str:
         """
         Render template with variables.
         
@@ -320,22 +320,22 @@ THEN:
         Returns:
             Rendered policy text
         """
-        
+
         if name not in self.templates:
             raise ValueError(f"Template '{name}' not found")
-        
+
         template = self.templates[name]
         content = template.content
-        
+
         # Merge with defaults
         all_vars = template.default_values.copy()
         if variables:
             all_vars.update(variables)
-        
+
         # Substitute variables
         for var_name, var_value in all_vars.items():
             placeholder = f'{{{{ {var_name} }}}}'
-            
+
             # Format value based on type
             if isinstance(var_value, list):
                 formatted = json.dumps(var_value)
@@ -347,35 +347,35 @@ THEN:
                     formatted = f'"{var_value}"'
             else:
                 formatted = str(var_value)
-            
+
             content = content.replace(placeholder, formatted)
-        
+
         return content.strip()
-    
-    def get_template(self, name: str) -> Optional[PolicyTemplate]:
+
+    def get_template(self, name: str) -> PolicyTemplate | None:
         """Get template by name"""
         return self.templates.get(name)
-    
-    def list_templates(self, category: Optional[str] = None) -> List[PolicyTemplate]:
+
+    def list_templates(self, category: str | None = None) -> list[PolicyTemplate]:
         """List all templates, optionally filtered by category"""
-        
+
         templates = list(self.templates.values())
-        
+
         if category:
             templates = [t for t in templates if t.category == category]
-        
+
         return templates
-    
-    def get_categories(self) -> List[str]:
+
+    def get_categories(self) -> list[str]:
         """Get all template categories"""
-        
+
         categories = set()
         for template in self.templates.values():
             categories.add(template.category)
-        
+
         return sorted(list(categories))
-    
-    def generate_combined_policy(self, template_configs: List[Dict]) -> str:
+
+    def generate_combined_policy(self, template_configs: list[dict]) -> str:
         """
         Generate combined policy from multiple templates.
         
@@ -385,22 +385,22 @@ THEN:
         Returns:
             Combined policy text
         """
-        
+
         policies = []
-        
+
         for config in template_configs:
             name = config['name']
             variables = config.get('variables', {})
-            
+
             rendered = self.render(name, variables)
             policies.append(f"# {self.templates[name].description}")
             policies.append(rendered)
             policies.append("")
-        
+
         return "\n".join(policies)
-    
-    def create_server_policy(self, server_name: str, 
-                           threat_model: Dict) -> str:
+
+    def create_server_policy(self, server_name: str,
+                           threat_model: dict) -> str:
         """
         Create policy based on threat model.
         
@@ -411,16 +411,16 @@ THEN:
         Returns:
             Generated policy text
         """
-        
+
         configs = []
-        
+
         # Add policies based on threat model
         if threat_model.get('handles_secrets'):
             configs.append({
                 'name': 'secrets',
                 'variables': {'WHITELIST': []}
             })
-        
+
         if threat_model.get('handles_pii'):
             configs.append({
                 'name': 'pii',
@@ -429,13 +429,13 @@ THEN:
                     'TRUSTED_SERVERS': []
                 }
             })
-        
+
         if threat_model.get('executes_commands'):
             configs.append({
                 'name': 'command_injection',
                 'variables': {}
             })
-        
+
         if threat_model.get('accesses_filesystem'):
             configs.append({
                 'name': 'filesystem_access',
@@ -448,7 +448,7 @@ THEN:
                 'name': 'path_traversal',
                 'variables': {}
             })
-        
+
         if threat_model.get('network_access'):
             configs.append({
                 'name': 'network_exfiltration',
@@ -457,7 +457,7 @@ THEN:
                     'ALLOWED_DOMAINS': threat_model.get('allowed_domains', '.*')
                 }
             })
-        
+
         if threat_model.get('disabled_tools'):
             configs.append({
                 'name': 'disable_tool',
@@ -465,5 +465,5 @@ THEN:
                     'DISABLED_TOOLS': threat_model['disabled_tools']
                 }
             })
-        
+
         return self.generate_combined_policy(configs)

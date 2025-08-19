@@ -24,28 +24,28 @@ Examples:
   python -m src.cli.dashboard --host 0.0.0.0    # Allow external connections
         """
     )
-    
+
     parser.add_argument(
         '--host',
         default='127.0.0.1',
         help='Host to bind to (default: 127.0.0.1)'
     )
-    
+
     parser.add_argument(
-        '--port', 
+        '--port',
         type=int,
         default=8000,
         help='Port to bind to (default: 8000)'
     )
-    
+
     parser.add_argument(
         '--reload',
         action='store_true',
         help='Enable auto-reload on code changes'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Import and start the dashboard via uvicorn (FastAPI standard)
     try:
         import uvicorn

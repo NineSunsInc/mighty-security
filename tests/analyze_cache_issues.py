@@ -12,27 +12,27 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def analyze_issues():
     """Analyze the caching issues"""
-    
+
     print("\n" + "="*70)
     print("CACHE INTEGRATION ANALYSIS")
     print("="*70)
-    
+
     print("\n🔍 FINDINGS:\n")
-    
+
     print("1. AST CACHE ISSUE:")
     print("   ❌ AST cache is created but NOT used")
     print("   - Line 196: self._ast_cache = {} is initialized")
     print("   - Line 1018: ast.parse(content) is called directly")
     print("   - Should use: self._ast_cache or global_ast_cache")
     print()
-    
+
     print("2. DATABASE CACHE ISSUE:")
     print("   ⚠️  Database cache is TOO aggressive")
     print("   - Second run returns cached results without re-analyzing")
     print("   - This means NEW threats won't be detected on subsequent runs")
     print("   - Security risk: Changes to files are ignored!")
     print()
-    
+
     print("3. WHAT'S HAPPENING:")
     print("   First run:")
     print("   - Analyzes files properly")
@@ -45,20 +45,20 @@ def analyze_issues():
     print("   - Doesn't re-analyze files")
     print("   - Returns 0 threats (cache retrieval issue)")
     print()
-    
+
     print("4. SECURITY IMPLICATIONS:")
     print("   🚨 CRITICAL: We're not re-analyzing on subsequent runs")
     print("   🚨 CRITICAL: AST cache optimization is not being used")
     print("   🚨 CRITICAL: Database cache may hide new vulnerabilities")
     print()
-    
+
     print("5. REQUIRED FIXES:")
     print("   a) Integrate AST cache properly in _ast_analysis")
     print("   b) Fix database cache to cache file-level results, not entire scan")
     print("   c) Invalidate cache when files change")
     print("   d) Ensure security is never compromised for speed")
     print()
-    
+
     print("="*70)
     print("RECOMMENDED IMMEDIATE ACTIONS")
     print("="*70)
@@ -81,11 +81,11 @@ def analyze_issues():
 
 def check_actual_integration():
     """Check how caching should be integrated"""
-    
+
     print("\n" + "="*70)
     print("PROPER INTEGRATION EXAMPLE")
     print("="*70)
-    
+
     print("\nCURRENT CODE (Line 1013-1020):")
     print("-"*40)
     print("""
@@ -96,7 +96,7 @@ def _ast_analysis(self, content: str, relative_path: Path) -> List[ThreatIndicat
     except SyntaxError:
         return threats
 """)
-    
+
     print("\nSHOULD BE:")
     print("-"*40)
     print("""
@@ -112,7 +112,7 @@ def _ast_analysis(self, content: str, relative_path: Path, file_path: Path) -> L
     
     # Continue with analysis using cached AST...
 """)
-    
+
     print("\nBENEFITS:")
     print("  ✅ 20x speedup on repeated analysis")
     print("  ✅ No security compromise (same AST, same analysis)")
@@ -123,7 +123,7 @@ def _ast_analysis(self, content: str, relative_path: Path, file_path: Path) -> L
 if __name__ == "__main__":
     analyze_issues()
     check_actual_integration()
-    
+
     print("\n" + "="*70)
     print("CONCLUSION")
     print("="*70)

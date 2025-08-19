@@ -4,12 +4,11 @@ Smart Context Optimizer for LLM Analysis
 Intelligently ranks files for maximum threat detection with SOTA models
 """
 
-from typing import List, Dict, Any, Tuple, Optional
-from pathlib import Path
-from dataclasses import dataclass, field
 import re
-import math
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
+
 
 class FileImportance(Enum):
     """File importance levels for LLM analysis"""
@@ -25,7 +24,7 @@ class FileRankingScore:
     file_path: str
     total_score: float
     importance: FileImportance
-    
+
     # Scoring components
     threat_score: float = 0.0      # Based on static analysis threats
     complexity_score: float = 0.0   # Code complexity metrics
@@ -34,13 +33,13 @@ class FileRankingScore:
     network_score: float = 0.0      # Network operations
     obfuscation_score: float = 0.0  # Potential hiding
     dependency_score: float = 0.0   # How many files depend on this
-    
+
     # Metadata for LLM
-    risk_indicators: List[str] = field(default_factory=list)
-    key_functions: List[str] = field(default_factory=list)
-    external_calls: List[str] = field(default_factory=list)
-    
-    def get_context_summary(self) -> Dict[str, Any]:
+    risk_indicators: list[str] = field(default_factory=list)
+    key_functions: list[str] = field(default_factory=list)
+    external_calls: list[str] = field(default_factory=list)
+
+    def get_context_summary(self) -> dict[str, Any]:
         """Get context summary for LLM"""
         return {
             'importance': self.importance.name,
@@ -55,26 +54,26 @@ class FileRankingScore:
             'external_calls': self.external_calls[:5]
         }
 
-@dataclass 
+@dataclass
 class AnalysisTracker:
     """Track LLM analysis progress and results"""
     total_files: int
     analyzed_files: int = 0
-    findings_by_file: Dict[str, List[Any]] = field(default_factory=dict)
+    findings_by_file: dict[str, list[Any]] = field(default_factory=dict)
     aggregate_risk_score: float = 0.0
-    critical_findings: List[Any] = field(default_factory=list)
-    
-    def add_file_result(self, file_path: str, findings: List[Any], risk_score: float):
+    critical_findings: list[Any] = field(default_factory=list)
+
+    def add_file_result(self, file_path: str, findings: list[Any], risk_score: float):
         """Add analysis result for a file"""
         self.analyzed_files += 1
         self.findings_by_file[file_path] = findings
-        
+
         # Update aggregate risk (weighted average)
         self.aggregate_risk_score = (
-            (self.aggregate_risk_score * (self.analyzed_files - 1) + risk_score) 
+            (self.aggregate_risk_score * (self.analyzed_files - 1) + risk_score)
             / self.analyzed_files
         )
-        
+
         # Track critical findings
         for finding in findings:
             if finding.severity in ['CRITICAL', 'HIGH']:
@@ -82,8 +81,8 @@ class AnalysisTracker:
                     'file': file_path,
                     'finding': finding
                 })
-    
-    def get_summary(self) -> Dict[str, Any]:
+
+    def get_summary(self) -> dict[str, Any]:
         """Get analysis summary"""
         return {
             'progress': f"{self.analyzed_files}/{self.total_files}",
@@ -94,7 +93,7 @@ class AnalysisTracker:
 
 class SmartFileRanker:
     """Intelligent file ranking for optimal LLM analysis"""
-    
+
     def __init__(self):
         self.pattern_weights = {
             # Critical patterns that need LLM review
@@ -107,15 +106,15 @@ class SmartFileRanker:
             'obfuscation': (r'base64|marshal\.loads|pickle\.loads|exec.*decode', 0.8),
             'mcp_handlers': (r'handle_|execute_|process_request|on_message', 0.7),
         }
-        
+
     def rank_files_for_analysis(
         self,
-        files: Dict[str, str],  # file_path -> content
-        static_threats: List[Any],
-        semantic_graph: Optional[Any] = None,
-        max_files: Optional[int] = None,  # Optional limit, defaults to None (all files)
+        files: dict[str, str],  # file_path -> content
+        static_threats: list[Any],
+        semantic_graph: Any | None = None,
+        max_files: int | None = None,  # Optional limit, defaults to None (all files)
         min_score_threshold: float = 0.01  # Minimum score to include
-    ) -> List[FileRankingScore]:
+    ) -> list[FileRankingScore]:
         """Rank files by importance for LLM analysis
         
         Args:
@@ -128,16 +127,16 @@ class SmartFileRanker:
         Returns:
             Sorted list of FileRankingScore objects
         """
-        
+
         rankings = []
         threat_map = self._build_threat_map(static_threats)
         dependency_map = self._build_dependency_map(semantic_graph) if semantic_graph else {}
-        
+
         for file_path, content in files.items():
             # Skip non-code files
             if not self._is_code_file(file_path):
                 continue
-                
+
             # Calculate detailed scoring
             ranking = self._calculate_ranking(
                 file_path,
@@ -145,30 +144,30 @@ class SmartFileRanker:
                 threat_map.get(file_path, []),
                 dependency_map.get(file_path, 0)
             )
-            
+
             # Only include files above minimum threshold
             if ranking.total_score >= min_score_threshold:
                 rankings.append(ranking)
-        
+
         # Sort by total score (highest first)
         rankings.sort(key=lambda x: x.total_score, reverse=True)
-        
+
         # Apply optional limit
         if max_files is not None:
             return rankings[:max_files]
         return rankings
-    
+
     def _calculate_ranking(
         self,
         file_path: str,
         content: str,
-        threats: List[Any],
+        threats: list[Any],
         dependency_count: int
     ) -> FileRankingScore:
         """Calculate detailed ranking for a file"""
-        
+
         ranking = FileRankingScore(file_path=file_path, total_score=0.0, importance=FileImportance.LOW)
-        
+
         # Deprioritize test and package files using shared constants
         try:
             from src.analyzers.shared_constants import should_skip_for_llm
@@ -178,29 +177,29 @@ class SmartFileRanker:
             from pathlib import Path as PathLib
             sys.path.append(str(PathLib(__file__).parent.parent.parent))
             from src.analyzers.shared_constants import should_skip_for_llm
-        
+
         # Check if this file should be deprioritized
         should_deprioritize = should_skip_for_llm(file_path)
-        
+
         if should_deprioritize:
             # Test/package/vendor files get minimal priority
             ranking.total_score = 0.01
             ranking.importance = FileImportance.MINIMAL
             return ranking
-        
+
         # No reduction for important files
         priority_reduction = 1.0
-        
+
         # 1. Threat Score (0-1)
         if threats:
             critical = sum(1 for t in threats if self._get_severity(t) == 'CRITICAL')
             high = sum(1 for t in threats if self._get_severity(t) == 'HIGH')
             ranking.threat_score = min(1.0, (critical * 0.3 + high * 0.15))
             ranking.risk_indicators = [self._get_attack_vector(t) for t in threats[:5]]
-        
+
         # 2. Complexity Score (0-1)
         ranking.complexity_score = self._calculate_complexity(content)
-        
+
         # 3. Sensitivity Score (0-1)
         sensitive_patterns = 0
         for pattern_name, (pattern, weight) in self.pattern_weights.items():
@@ -208,7 +207,7 @@ class SmartFileRanker:
                 sensitive_patterns += weight
                 ranking.risk_indicators.append(pattern_name)
         ranking.sensitivity_score = min(1.0, sensitive_patterns / 3)
-        
+
         # 4. MCP Relevance (0-1)
         mcp_indicators = [
             'tool' in file_path.lower(),
@@ -219,21 +218,21 @@ class SmartFileRanker:
             'execute_' in content
         ]
         ranking.mcp_relevance = sum(mcp_indicators) / len(mcp_indicators)
-        
+
         # 5. Network Score (0-1)
         network_patterns = ['requests', 'urllib', 'socket', 'http', 'websocket']
         ranking.network_score = sum(1 for p in network_patterns if p in content.lower()) / len(network_patterns)
-        
+
         # 6. Obfuscation Score (0-1)
         ranking.obfuscation_score = self._detect_obfuscation_level(content)
-        
+
         # 7. Dependency Score (0-1)
         ranking.dependency_score = min(1.0, dependency_count / 10)
-        
+
         # Extract key functions and calls
         ranking.key_functions = self._extract_functions(content)
         ranking.external_calls = self._extract_external_calls(content)
-        
+
         # Calculate total score with weights
         weights = {
             'threat': 0.25,
@@ -244,7 +243,7 @@ class SmartFileRanker:
             'obfuscation': 0.15,
             'dependency': 0.05
         }
-        
+
         ranking.total_score = (
             weights['threat'] * ranking.threat_score +
             weights['complexity'] * ranking.complexity_score +
@@ -254,7 +253,7 @@ class SmartFileRanker:
             weights['obfuscation'] * ranking.obfuscation_score +
             weights['dependency'] * ranking.dependency_score
         ) * priority_reduction  # Apply reduction for pkg files
-        
+
         # Determine importance level
         if ranking.total_score >= 0.7:
             ranking.importance = FileImportance.CRITICAL
@@ -266,13 +265,13 @@ class SmartFileRanker:
             ranking.importance = FileImportance.LOW
         else:
             ranking.importance = FileImportance.MINIMAL
-        
+
         return ranking
-    
+
     def _calculate_complexity(self, content: str) -> float:
         """Calculate code complexity score"""
         lines = content.split('\n')
-        
+
         # Simple complexity metrics
         metrics = {
             'lines': len(lines),
@@ -282,37 +281,37 @@ class SmartFileRanker:
             'loops': len(re.findall(r'\bfor\s+|\bwhile\s+', content)),
             'try_blocks': len(re.findall(r'\btry:', content)),
         }
-        
+
         # Normalize to 0-1 score
         complexity = 0.0
-        
+
         # Lines of code contribution
         if 50 < metrics['lines'] < 500:
             complexity += 0.3
         elif metrics['lines'] >= 500:
             complexity += 0.2
-        
+
         # Cyclomatic complexity approximation
         cyclomatic = metrics['conditionals'] + metrics['loops']
         if cyclomatic > 10:
             complexity += 0.3
         elif cyclomatic > 5:
             complexity += 0.2
-        
+
         # Multiple classes/functions
         if metrics['classes'] > 2 or metrics['functions'] > 5:
             complexity += 0.2
-        
+
         # Error handling
         if metrics['try_blocks'] > 2:
             complexity += 0.2
-        
+
         return min(1.0, complexity)
-    
+
     def _detect_obfuscation_level(self, content: str) -> float:
         """Detect obfuscation level in code"""
         score = 0.0
-        
+
         # Check for obfuscation indicators
         indicators = {
             'single_char_vars': len(re.findall(r'\b[a-z_]\s*=', content)) / max(content.count('='), 1),
@@ -322,7 +321,7 @@ class SmartFileRanker:
             'long_strings': len(re.findall(r'["\'][^"\']{200,}["\']', content)) / 5,
             'unicode_escapes': len(re.findall(r'\\u[0-9a-f]{4}', content)) / 50
         }
-        
+
         # Weight and sum indicators
         weights = {
             'single_char_vars': 0.2,
@@ -332,13 +331,13 @@ class SmartFileRanker:
             'long_strings': 0.1,
             'unicode_escapes': 0.1
         }
-        
+
         for indicator, value in indicators.items():
             score += weights[indicator] * min(1.0, value)
-        
+
         return min(1.0, score)
-    
-    def _extract_functions(self, content: str) -> List[str]:
+
+    def _extract_functions(self, content: str) -> list[str]:
         """Extract function names from code"""
         # Python functions
         functions = re.findall(r'def\s+(\w+)', content)
@@ -346,11 +345,11 @@ class SmartFileRanker:
         functions.extend(re.findall(r'function\s+(\w+)', content))
         functions.extend(re.findall(r'(\w+)\s*:\s*(?:async\s+)?function', content))
         return list(set(functions))
-    
-    def _extract_external_calls(self, content: str) -> List[str]:
+
+    def _extract_external_calls(self, content: str) -> list[str]:
         """Extract external API/library calls"""
         calls = []
-        
+
         # Common dangerous calls
         patterns = [
             r'requests\.\w+',
@@ -361,14 +360,14 @@ class SmartFileRanker:
             r'exec\(',
             r'__import__',
         ]
-        
+
         for pattern in patterns:
             matches = re.findall(pattern, content)
             calls.extend(matches)
-        
+
         return list(set(calls))
-    
-    def _build_threat_map(self, threats: List[Any]) -> Dict[str, List[Any]]:
+
+    def _build_threat_map(self, threats: list[Any]) -> dict[str, list[Any]]:
         """Build map of threats by file"""
         threat_map = {}
         for threat in threats:
@@ -378,18 +377,18 @@ class SmartFileRanker:
                     threat_map[file_path] = []
                 threat_map[file_path].append(threat)
         return threat_map
-    
-    def _build_dependency_map(self, semantic_graph: Any) -> Dict[str, int]:
+
+    def _build_dependency_map(self, semantic_graph: Any) -> dict[str, int]:
         """Build map of file dependencies"""
         # Placeholder - would use actual graph analysis
         return {}
-    
+
     def _is_code_file(self, file_path: str) -> bool:
         """Check if file is a code file"""
         # Skip test files and vendor files
         if any(x in file_path.lower() for x in ['_test.', '/test/', '/tests/', '/vendor/', '/.git/']):
             return False
-            
+
         try:
             from src.analyzers.shared_constants import is_code_file
         except ImportError:
@@ -399,13 +398,13 @@ class SmartFileRanker:
             sys.path.append(str(Path(__file__).parent.parent))
             from shared_constants import is_code_file
         return is_code_file(file_path)
-    
+
     def _get_severity(self, threat: Any) -> str:
         """Extract severity from threat object"""
         if hasattr(threat, 'severity'):
             return str(threat.severity)
         return threat.get('severity', 'MEDIUM')
-    
+
     def _get_attack_vector(self, threat: Any) -> str:
         """Extract attack vector from threat"""
         if hasattr(threat, 'attack_vector'):

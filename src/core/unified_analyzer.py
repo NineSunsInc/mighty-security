@@ -5,14 +5,13 @@ This consolidates all the different analyzers into one coherent interface.
 """
 
 import asyncio
-from typing import Dict, List, Optional, Any
-from pathlib import Path
-import json
 import sys
-import os
+from pathlib import Path
+from typing import Any
 
 # Load environment variables
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Add parent directories to path for imports
@@ -24,51 +23,51 @@ class UnifiedAnalyzer:
     
     No more confusion - this is THE analyzer.
     """
-    
-    def __init__(self, config: Optional[Dict] = None):
+
+    def __init__(self, config: dict | None = None):
         """Initialize with optional configuration."""
         self.config = config or {}
         self._methods = {}
         self._init_methods()
-    
+
     def _init_methods(self):
         """Initialize analysis methods based on configuration."""
-        
+
         # Always available: Static analysis
         try:
             from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
             self._methods['static'] = ComprehensiveMCPAnalyzer()
         except ImportError:
             pass
-        
+
         # Taint analysis
         try:
             from src.analyzers.taint.taint_engine import EnhancedTaintEngine
             self._methods['taint'] = EnhancedTaintEngine()
         except ImportError:
             pass
-        
+
         # Behavior analysis
         try:
             from src.analyzers.comprehensive.behavior import BehaviorAnalyzer
             self._methods['behavior'] = BehaviorAnalyzer()
         except ImportError:
             pass
-        
+
         # Policy checking
         try:
             from src.policies.manager import PolicyManager
             self._methods['policy'] = PolicyManager(self.config.get('policy_file'))
         except ImportError:
             pass
-        
+
         # Signature verification
         try:
             from src.signatures.manager import SignatureManager
             self._methods['signature'] = SignatureManager()
         except ImportError:
             pass
-        
+
         # Optional: LLM analysis (enabled by default unless explicitly disabled)
         if self.config.get('enable_llm', True) and not self.config.get('disable_llm'):
             try:
@@ -79,7 +78,7 @@ class UnifiedAnalyzer:
                 if 'api_key' not in str(e) and 'CEREBRAS_API_KEY' not in str(e):
                     print(f"Note: LLM analysis unavailable: {e}")
                 pass
-        
+
         # Optional: ML analysis
         if self.config.get('enable_ml') or self.config.get('enable_all'):
             try:
@@ -87,8 +86,8 @@ class UnifiedAnalyzer:
                 self._methods['ml'] = LocalMLModel()
             except ImportError:
                 pass
-    
-    async def analyze(self, target: Any) -> Dict:
+
+    async def analyze(self, target: Any) -> dict:
         """
         Analyze any target - tool, file, config, etc.
         
@@ -101,7 +100,7 @@ class UnifiedAnalyzer:
         Returns:
             Unified analysis result with threat_level, reason, should_block
         """
-        
+
         # Determine target type
         if isinstance(target, dict):
             if 'config' in target:
@@ -116,8 +115,8 @@ class UnifiedAnalyzer:
                 'reason': 'Unsupported target type',
                 'should_block': False
             }
-    
-    async def analyze_tool(self, tool: Dict) -> Dict:
+
+    async def analyze_tool(self, tool: dict) -> dict:
         """
         Analyze a tool definition.
         
@@ -128,7 +127,7 @@ class UnifiedAnalyzer:
             Analysis result
         """
         results = {}
-        
+
         # Quick mode - only essential checks
         if self.config.get('quick_mode'):
             methods = ['signature', 'policy']
@@ -138,13 +137,13 @@ class UnifiedAnalyzer:
         # Normal mode - standard checks
         else:
             methods = ['static', 'signature', 'policy', 'behavior']
-        
+
         # Run selected methods
         for method_name in methods:
             if method_name in self._methods:
                 try:
                     method = self._methods[method_name]
-                    
+
                     if method_name == 'signature':
                         result = await method.verify_tool(tool)
                         results[method_name] = {
@@ -152,7 +151,7 @@ class UnifiedAnalyzer:
                             'threat_level': result.threat_level,
                             'changed': result.changed
                         }
-                    
+
                     elif method_name == 'policy':
                         result = await method.evaluate(
                             tool.get('name', 'unknown'),
@@ -164,7 +163,7 @@ class UnifiedAnalyzer:
                             'matched': result.matched_policies,
                             'reason': result.reason
                         }
-                    
+
                     elif method_name == 'static':
                         # Create temp file for static analysis
                         import tempfile
@@ -175,7 +174,7 @@ class UnifiedAnalyzer:
                             if tool.get('code'):
                                 f.write(tool['code'])
                             temp_path = f.name
-                        
+
                         # Analyze (note: analyze_file method needs to exist)
                         try:
                             # For now, use basic analysis
@@ -185,18 +184,18 @@ class UnifiedAnalyzer:
                             }
                         finally:
                             Path(temp_path).unlink()
-                    
+
                     else:
                         # Generic analysis call
                         results[method_name] = {'checked': True}
-                        
+
                 except Exception as e:
                     results[method_name] = {'error': str(e)}
-        
+
         # Combine results into final assessment
         return self._combine_results(results)
-    
-    async def analyze_file(self, file_path: str) -> Dict:
+
+    async def analyze_file(self, file_path: str) -> dict:
         """
         Analyze a file.
         
@@ -207,17 +206,17 @@ class UnifiedAnalyzer:
             Analysis result
         """
         path = Path(file_path)
-        
+
         if not path.exists():
             return {
                 'threat_level': 'error',
                 'reason': f'File not found: {file_path}',
                 'should_block': False
             }
-        
+
         # Read file content
         content = path.read_text()
-        
+
         # Create tool representation
         tool = {
             'name': path.name,
@@ -225,10 +224,10 @@ class UnifiedAnalyzer:
             'code': content,
             'file_path': file_path
         }
-        
+
         return await self.analyze_tool(tool)
-    
-    async def analyze_config(self, config: Dict) -> Dict:
+
+    async def analyze_config(self, config: dict) -> dict:
         """
         Analyze an MCP configuration.
         
@@ -243,10 +242,10 @@ class UnifiedAnalyzer:
             'threats': [],
             'servers': {}
         }
-        
+
         # Extract and analyze servers
         servers = self._extract_servers(config.get('config', {}))
-        
+
         for server_name, server_def in servers.items():
             # Create tool representation for server
             tool = {
@@ -255,11 +254,11 @@ class UnifiedAnalyzer:
                 'description': server_def.get('description', ''),
                 'parameters': server_def
             }
-            
+
             # Analyze server as tool
             server_result = await self.analyze_tool(tool)
             results['servers'][server_name] = server_result
-            
+
             # Collect threats
             if server_result.get('threat_level') in ['high', 'critical']:
                 results['threats'].append({
@@ -267,10 +266,10 @@ class UnifiedAnalyzer:
                     'level': server_result['threat_level'],
                     'reason': server_result.get('reason')
                 })
-        
+
         return results
-    
-    def _extract_servers(self, config: Dict) -> Dict:
+
+    def _extract_servers(self, config: dict) -> dict:
         """Extract servers from config."""
         # Handle different config formats
         if 'mcpServers' in config:
@@ -279,8 +278,8 @@ class UnifiedAnalyzer:
             return config['servers']
         else:
             return {}
-    
-    def _combine_results(self, results: Dict) -> Dict:
+
+    def _combine_results(self, results: dict) -> dict:
         """
         Combine results from multiple analysis methods.
         
@@ -297,11 +296,11 @@ class UnifiedAnalyzer:
             'high': 7,
             'critical': 10
         }
-        
+
         max_threat = 'low'
         reasons = []
         should_block = False
-        
+
         # Check signature results
         if 'signature' in results:
             sig = results['signature']
@@ -312,7 +311,7 @@ class UnifiedAnalyzer:
             elif sig.get('changed'):
                 max_threat = 'high'
                 reasons.append('Tool signature has changed')
-        
+
         # Check policy results
         if 'policy' in results:
             pol = results['policy']
@@ -324,7 +323,7 @@ class UnifiedAnalyzer:
                 if threat_scores.get(max_threat, 0) < 5:
                     max_threat = 'medium'
                 reasons.append('Requires modification per policy')
-        
+
         # Check static analysis
         if 'static' in results:
             static = results['static']
@@ -338,14 +337,14 @@ class UnifiedAnalyzer:
             elif score >= 4:
                 if threat_scores.get(max_threat, 0) < 5:
                     max_threat = 'medium'
-            
+
             if static.get('threats'):
                 reasons.extend([t.get('type', 'threat') for t in static['threats'][:3]])
-        
+
         # Default reason if none found
         if not reasons:
             reasons = ['No specific threats detected']
-        
+
         return {
             'threat_level': max_threat,
             'threat_score': threat_scores.get(max_threat, 0),
@@ -353,8 +352,8 @@ class UnifiedAnalyzer:
             'should_block': should_block,
             'details': results
         }
-    
-    async def batch_analyze(self, targets: List[Any]) -> List[Dict]:
+
+    async def batch_analyze(self, targets: list[Any]) -> list[dict]:
         """Analyze multiple targets efficiently."""
         tasks = [self.analyze(target) for target in targets]
         return await asyncio.gather(*tasks)

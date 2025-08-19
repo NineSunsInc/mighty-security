@@ -5,12 +5,10 @@ Pulls samples from various categories and runs security analysis
 """
 
 import json
-import sys
-import os
-from pathlib import Path
-from typing import Dict, List, Tuple
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 # Add parent directory to path to import our analyzer
 sys.path.append(str(Path(__file__).parent.parent))
@@ -29,7 +27,7 @@ MCP_SERVERS_TO_TEST = {
     "Gaming": [
         "https://github.com/modelcontextprotocol/servers/tree/main/src/everart",
         "https://github.com/cngarrison/mcp-server-yjs-google-drive",
-        "https://github.com/cngarrison/mcp-server-yjs-websocket", 
+        "https://github.com/cngarrison/mcp-server-yjs-websocket",
         "https://github.com/cngarrison/mcp-server-twitch",
         "https://github.com/cngarrison/mcp-server-epic-games"
     ],
@@ -58,27 +56,27 @@ MCP_SERVERS_TO_TEST = {
         "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
         "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
         "https://github.com/BasedHardware/Whomane",
-        "https://github.com/ktanaka101/mcp-server-duckdb", 
+        "https://github.com/ktanaka101/mcp-server-duckdb",
         "https://github.com/benborla/mcp-server-bigquery"
     ]
 }
 
 class MCPServerTester:
     """Test MCP servers from awesome-mcp-servers repository"""
-    
+
     def __init__(self, quick_mode: bool = True):
         self.quick_mode = quick_mode
         self.results = {}
         self.analyzer_path = Path(__file__).parent.parent / "mighty_mcp.py"
         self.servers_to_test = MCP_SERVERS_TO_TEST  # Default to all servers
-        
-    def test_server(self, url: str, category: str) -> Dict:
+
+    def test_server(self, url: str, category: str) -> dict:
         """Test a single MCP server"""
         print(f"\n{'='*60}")
         print(f"Testing: {url}")
         print(f"Category: {category}")
         print(f"{'='*60}")
-        
+
         result = {
             "url": url,
             "category": category,
@@ -89,10 +87,10 @@ class MCPServerTester:
             "error": None,
             "scan_time": 0
         }
-        
+
         try:
             start_time = time.time()
-            
+
             # Run the analyzer
             cmd = [
                 "python3", str(self.analyzer_path),
@@ -100,12 +98,12 @@ class MCPServerTester:
                 "--profile", "production",
                 "--no-cache"
             ]
-            
+
             if self.quick_mode:
                 cmd.append("--quick")
             else:
                 cmd.append("--deep")
-            
+
             # Run with timeout
             process = subprocess.run(
                 cmd,
@@ -113,13 +111,13 @@ class MCPServerTester:
                 text=True,
                 timeout=120  # 2 minute timeout
             )
-            
+
             scan_time = time.time() - start_time
             result["scan_time"] = round(scan_time, 2)
-            
+
             # Parse output
             output = process.stdout + process.stderr
-            
+
             # Extract key metrics from output - handle both formats
             if "SECURITY REPORT" in output:
                 for line in output.split("\n"):
@@ -136,7 +134,7 @@ class MCPServerTester:
                             result["threats_found"] = int(line.split("Total Threats:")[-1].strip())
                         except:
                             pass
-                
+
                 # Check if we got at least threats count (minimal output)
                 if "Total Threats:" in output:
                     result["status"] = "completed"
@@ -150,20 +148,20 @@ class MCPServerTester:
             else:
                 result["status"] = "failed"
                 result["error"] = "Could not parse output"
-                
+
         except subprocess.TimeoutExpired:
             result["status"] = "timeout"
             result["error"] = "Analysis timed out after 120 seconds"
         except Exception as e:
             result["status"] = "error"
             result["error"] = str(e)
-        
+
         # Print summary
         self._print_result(result)
-        
+
         return result
-    
-    def _print_result(self, result: Dict):
+
+    def _print_result(self, result: dict):
         """Print a formatted result"""
         if result["status"] == "completed":
             # Color code based on threat level
@@ -178,7 +176,7 @@ class MCPServerTester:
                 emoji = "🟢"
             else:
                 emoji = "⚪"
-            
+
             print(f"{emoji} Threat Level: {threat_level}")
             print(f"   Score: {result.get('threat_score', 'N/A')}%")
             print(f"   Threats Found: {result.get('threats_found', 0)}")
@@ -187,45 +185,45 @@ class MCPServerTester:
             print(f"❌ Status: {result['status']}")
             if result.get("error"):
                 print(f"   Error: {result['error']}")
-    
-    def run_all_tests(self) -> Dict:
+
+    def run_all_tests(self) -> dict:
         """Run tests on all configured servers"""
         print("\n" + "="*70)
         print("MCP SERVER SECURITY ANALYSIS")
         print(f"Mode: {'QUICK' if self.quick_mode else 'DEEP'}")
         print(f"Testing {sum(len(v) for v in self.servers_to_test.values())} servers across {len(self.servers_to_test)} categories")
         print("="*70)
-        
+
         all_results = {}
-        
+
         for category, urls in self.servers_to_test.items():
             print(f"\n\n{'#'*70}")
             print(f"# CATEGORY: {category}")
             print(f"{'#'*70}")
-            
+
             category_results = []
             for url in urls:
                 result = self.test_server(url, category)
                 category_results.append(result)
-                
+
                 # Small delay between tests to avoid overwhelming
                 time.sleep(2)
-            
+
             all_results[category] = category_results
-        
+
         self.results = all_results
         return all_results
-    
+
     def generate_summary(self) -> str:
         """Generate a summary report"""
         if not self.results:
             return "No results to summarize"
-        
+
         summary = []
         summary.append("\n" + "="*70)
         summary.append("SECURITY ANALYSIS SUMMARY")
         summary.append("="*70)
-        
+
         total_servers = 0
         threat_distribution = {
             "CRITICAL": 0,
@@ -236,13 +234,13 @@ class MCPServerTester:
             "SAFE": 0,
             "UNKNOWN": 0
         }
-        
+
         for category, results in self.results.items():
             summary.append(f"\n{category}:")
             for result in results:
                 total_servers += 1
                 threat_level = result.get("threat_level", "UNKNOWN")
-                
+
                 # Categorize threat level
                 found_category = False
                 for threat_key in threat_distribution:
@@ -250,16 +248,16 @@ class MCPServerTester:
                         threat_distribution[threat_key] += 1
                         found_category = True
                         break
-                
+
                 if not found_category:
                     threat_distribution["UNKNOWN"] += 1
-                
+
                 # Build summary line
                 if result["status"] == "completed":
                     summary.append(f"  - {result['url'].split('/')[-1]}: {threat_level} ({result.get('threat_score', 0)}%)")
                 else:
                     summary.append(f"  - {result['url'].split('/')[-1]}: {result['status'].upper()}")
-        
+
         # Overall statistics
         summary.append(f"\n{'='*70}")
         summary.append("OVERALL STATISTICS")
@@ -270,27 +268,27 @@ class MCPServerTester:
             if count > 0:
                 percentage = (count / total_servers) * 100
                 summary.append(f"  {level}: {count} ({percentage:.1f}%)")
-        
+
         # Calculate average threat score
         all_scores = []
         for category_results in self.results.values():
             for result in category_results:
                 if result.get("threat_score") is not None:
                     all_scores.append(result["threat_score"])
-        
+
         if all_scores:
             avg_score = sum(all_scores) / len(all_scores)
             summary.append(f"\nAverage Threat Score: {avg_score:.1f}%")
-        
+
         # Save results to file
         self._save_results()
-        
+
         return "\n".join(summary)
-    
+
     def _save_results(self):
         """Save results to JSON file"""
         output_file = Path(__file__).parent / "awesome_mcp_servers_results.json"
-        
+
         # Add metadata
         output_data = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -298,28 +296,28 @@ class MCPServerTester:
             "total_servers": sum(len(v) for v in self.results.values()),
             "results": self.results
         }
-        
+
         with open(output_file, 'w') as f:
             json.dump(output_data, f, indent=2)
-        
+
         print(f"\nResults saved to: {output_file}")
 
 
 def main():
     """Main entry point"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Test MCP servers from awesome-mcp-servers")
     parser.add_argument("--deep", action="store_true", help="Use deep analysis mode (slower)")
     parser.add_argument("--category", help="Test only a specific category")
     args = parser.parse_args()
-    
+
     # Check if analyzer exists
     analyzer_path = Path(__file__).parent.parent / "mighty_mcp.py"
     if not analyzer_path.exists():
         print(f"Error: Analyzer not found at {analyzer_path}")
         sys.exit(1)
-    
+
     # Filter categories if specified
     servers_to_test = MCP_SERVERS_TO_TEST
     if args.category:
@@ -329,13 +327,13 @@ def main():
             print(f"Error: Unknown category '{args.category}'")
             print(f"Available categories: {', '.join(MCP_SERVERS_TO_TEST.keys())}")
             sys.exit(1)
-    
+
     # Run tests
     tester = MCPServerTester(quick_mode=not args.deep)
-    
+
     # Store the servers to test in the tester
     tester.servers_to_test = servers_to_test
-    
+
     try:
         tester.run_all_tests()
         print(tester.generate_summary())

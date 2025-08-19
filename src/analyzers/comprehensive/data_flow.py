@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Dict, List
 
 from .models import DataFlow
 
@@ -8,8 +7,8 @@ from .models import DataFlow
 class DataFlowAnalyzer:
     """Analyze simple data flows within a repository (single-file heuristic)."""
 
-    def analyze(self, repo_path: Path) -> List[DataFlow]:
-        flows: List[DataFlow] = []
+    def analyze(self, repo_path: Path) -> list[DataFlow]:
+        flows: list[DataFlow] = []
         sources = self._find_sources(repo_path)
         sinks = self._find_sinks(repo_path)
         for source in sources:
@@ -30,8 +29,8 @@ class DataFlowAnalyzer:
                     )
         return flows
 
-    def _find_sources(self, repo_path: Path) -> List[Dict]:
-        sources: List[Dict] = []
+    def _find_sources(self, repo_path: Path) -> list[dict]:
+        sources: list[dict] = []
         patterns = {
             "user_input": r"input\s*\(",
             "file_read": r"open\s*\([^)]*[\'\"]r",
@@ -57,8 +56,8 @@ class DataFlowAnalyzer:
                 pass
         return sources
 
-    def _find_sinks(self, repo_path: Path) -> List[Dict]:
-        sinks: List[Dict] = []
+    def _find_sinks(self, repo_path: Path) -> list[dict]:
+        sinks: list[dict] = []
         patterns = {
             "exec": r"exec\s*\(",
             "network": r"send\s*\(",

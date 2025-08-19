@@ -3,18 +3,16 @@
 Test MCP Dependency Analyzer - Focused on MCP tool security analysis
 """
 
+import json
 import os
 import sys
 import tempfile
-import json
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.analyzers.comprehensive.mcp_dependency_analyzer import (
-    MCPDependencyAnalyzer, MCPToolInfo, MCPDependencyGraph
-)
+from src.analyzers.comprehensive.mcp_dependency_analyzer import MCPDependencyAnalyzer
 
 
 def test_mcp_tool_detection():
@@ -22,10 +20,10 @@ def test_mcp_tool_detection():
     print("\n" + "="*60)
     print("🔍 MCP TOOL DETECTION TEST")
     print("="*60)
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        
+
         # Create MCP tool files
         tool1 = tmpdir / "calculator_tool.py"
         tool1.write_text("""
@@ -36,7 +34,7 @@ def handle_calculation(params):
     result = eval(expression)
     return {"result": result}
 """)
-        
+
         tool2 = tmpdir / "file_handler.py"
         tool2.write_text("""
 import os
@@ -53,7 +51,7 @@ class FileHandlerTool:
         # DANGER: Command injection
         subprocess.run(cmd, shell=True)
 """)
-        
+
         # Create a safe tool
         safe_tool = tmpdir / "json_formatter.py"
         safe_tool.write_text("""
@@ -65,26 +63,26 @@ def format_json(params):
     pretty = json.dumps(data, indent=2)
     return {"formatted": pretty}
 """)
-        
+
         # Run analysis
         analyzer = MCPDependencyAnalyzer()
         graph = analyzer.analyze(tmpdir)
-        
+
         print(f"   ✅ Found {len(graph.tools)} MCP tools")
-        
+
         # Check detection
         assert len(graph.tools) >= 2
-        
+
         # Check for risky operations
         risky = [t for t in graph.tools.values() if t.risky_operations]
         print(f"   ⚠️  {len(risky)} tools have risky operations")
-        
+
         # Check security concerns
         critical = [c for c in graph.security_concerns if c['severity'] == 'CRITICAL']
         print(f"   🚨 {len(critical)} critical security concerns found")
-        
+
         assert len(critical) > 0  # Should find eval and subprocess issues
-        
+
         print("   ✅ MCP tool detection working!")
         return True
 
@@ -94,10 +92,10 @@ def test_tool_relationships():
     print("\n" + "="*60)
     print("🔍 TOOL RELATIONSHIP DETECTION TEST")
     print("="*60)
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        
+
         # Create interconnected tools
         (tmpdir / "main_tool.py").write_text("""
 from .auth_tool import authenticate
@@ -108,7 +106,7 @@ def handle_request(params):
     if authenticate(params):
         return process_data(params)
 """)
-        
+
         (tmpdir / "auth_tool.py").write_text("""
 import os
 
@@ -118,7 +116,7 @@ def authenticate(params):
     # Check token
     return token == os.environ.get("SECRET_TOKEN")
 """)
-        
+
         (tmpdir / "data_tool.py").write_text("""
 import pickle
 
@@ -129,24 +127,24 @@ def process_data(params):
     obj = pickle.loads(data)
     return obj
 """)
-        
+
         # Run analysis
         analyzer = MCPDependencyAnalyzer()
         graph = analyzer.analyze(tmpdir)
-        
+
         print(f"   ✅ Found {len(graph.tools)} tools")
         print(f"   📊 Found {len(graph.tool_relationships)} relationships")
-        
+
         # Check that main_tool imports were detected
         main_imports = None
         for tool in graph.tools.values():
             if 'main_tool' in tool.file_path:
                 main_imports = tool.imports_tools
                 break
-        
+
         if main_imports:
             print(f"   ✅ Main tool imports: {main_imports}")
-        
+
         print("   ✅ Tool relationship detection working!")
         return True
 
@@ -156,10 +154,10 @@ def test_mcp_manifest_analysis():
     print("\n" + "="*60)
     print("📋 MCP MANIFEST ANALYSIS TEST")
     print("="*60)
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        
+
         # Create MCP manifest with security issues
         manifest = {
             "name": "test-mcp-server",
@@ -176,10 +174,10 @@ def test_mcp_manifest_analysis():
                 }
             ]
         }
-        
+
         with open(tmpdir / "mcp.json", 'w') as f:
             json.dump(manifest, f)
-        
+
         # Create corresponding tool file
         (tmpdir / "dangerous_tool.py").write_text("""
 import subprocess
@@ -189,22 +187,22 @@ def handle(params):
     cmd = params.get("command")
     subprocess.run(cmd, shell=True)
 """)
-        
+
         # Run analysis
         analyzer = MCPDependencyAnalyzer()
         graph = analyzer.analyze(tmpdir)
-        
+
         assert graph.mcp_manifest is not None
         print(f"   ✅ Manifest found: {graph.mcp_manifest['name']}")
-        
+
         # Check for permission issues
         if graph.mcp_manifest['security_issues']:
-            print(f"   🚨 Security issues in manifest:")
+            print("   🚨 Security issues in manifest:")
             for issue in graph.mcp_manifest['security_issues']:
                 print(f"      - {issue}")
-        
+
         assert len(graph.mcp_manifest['security_issues']) > 0
-        
+
         print("   ✅ MCP manifest analysis working!")
         return True
 
@@ -214,10 +212,10 @@ def test_security_scoring():
     print("\n" + "="*60)
     print("📊 SECURITY SCORING TEST")
     print("="*60)
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        
+
         # Create tools with different risk levels
         high_risk = tmpdir / "high_risk_tool.py"
         high_risk.write_text("""
@@ -231,7 +229,7 @@ def handle(params):
     subprocess.run(cmd, shell=True)  # Command injection
     api_key = "sk-12345678"  # Hardcoded secret
 """)
-        
+
         medium_risk = tmpdir / "medium_risk_tool.py"
         medium_risk.write_text("""
 import requests
@@ -243,7 +241,7 @@ def handle(params):
     response = requests.get(url)
     return response.text
 """)
-        
+
         low_risk = tmpdir / "low_risk_tool.py"
         low_risk.write_text("""
 import json
@@ -254,11 +252,11 @@ def handle(params):
     data = params.get("data")
     return json.dumps(data)
 """)
-        
+
         # Run analysis
         analyzer = MCPDependencyAnalyzer()
         graph = analyzer.analyze(tmpdir)
-        
+
         # Check security scores
         scores = {}
         for tool in graph.tools.values():
@@ -268,16 +266,16 @@ def handle(params):
                 scores['medium'] = tool.security_score
             elif 'low_risk' in tool.file_path:
                 scores['low'] = tool.security_score
-        
-        print(f"   📊 Security Scores:")
+
+        print("   📊 Security Scores:")
         print(f"      High-risk tool: {scores.get('high', 'N/A')}/100")
         print(f"      Medium-risk tool: {scores.get('medium', 'N/A')}/100")
         print(f"      Low-risk tool: {scores.get('low', 'N/A')}/100")
-        
+
         # Verify scoring makes sense
         if 'high' in scores and 'low' in scores:
             assert scores['high'] < scores['low'], "High-risk should score lower than low-risk"
-        
+
         print("   ✅ Security scoring working!")
         return True
 
@@ -285,17 +283,17 @@ def handle(params):
 def main():
     """Run all MCP dependency analyzer tests"""
     print("🧪 Testing MCP Dependency Analyzer...")
-    
+
     tests = [
         ("MCP Tool Detection", test_mcp_tool_detection),
         ("Tool Relationships", test_tool_relationships),
         ("MCP Manifest Analysis", test_mcp_manifest_analysis),
         ("Security Scoring", test_security_scoring)
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test_name, test_func in tests:
         try:
             if test_func():
@@ -305,7 +303,7 @@ def main():
             import traceback
             traceback.print_exc()
             failed += 1
-    
+
     print("\n" + "="*60)
     print("FINAL TEST RESULTS")
     print("="*60)
@@ -314,7 +312,7 @@ def main():
         print(f"❌ Failed: {failed}/{len(tests)}")
     else:
         print("🎉 ALL MCP DEPENDENCY ANALYZER TESTS PASSED!")
-    
+
     return failed == 0
 
 

@@ -5,26 +5,23 @@ Tests that real vulnerabilities are still caught while reducing false positives.
 """
 
 import sys
-import tempfile
-import json
 from pathlib import Path
-from typing import List, Dict
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.analyzers.context_analyzer import ContextAnalyzer, FileContext
-from src.analyzers.smart_filter import SmartFilter, FilterResult
+from src.analyzers.context_analyzer import ContextAnalyzer
+from src.analyzers.smart_filter import SmartFilter
 
 
 class TestContextAwareFiltering:
     """Test suite for context-aware security scanning"""
-    
+
     def __init__(self):
         self.passed = 0
         self.failed = 0
         self.results = []
-    
+
     def assert_equal(self, actual, expected, message):
         """Assert helper with tracking"""
         if actual == expected:
@@ -36,14 +33,14 @@ class TestContextAwareFiltering:
             self.results.append(f"❌ FAIL: {message}")
             self.results.append(f"    Expected: {expected}, Got: {actual}")
             return False
-    
+
     def test_context_detection(self):
         """Test accurate context detection for various file types"""
         print("\n🔍 Testing Context Detection")
         print("-" * 60)
-        
+
         analyzer = ContextAnalyzer()
-        
+
         # Test cases with file path and content
         test_cases = [
             # Test files should be detected
@@ -101,12 +98,12 @@ class TestContextAwareFiltering:
                 'description': 'Generated protobuf file'
             }
         ]
-        
+
         for case in test_cases:
             context = analyzer.get_file_context(case['path'], case['content'])
-            
+
             self.assert_equal(
-                context.is_test, 
+                context.is_test,
                 case['expected_is_test'],
                 f"{case['description']}: is_test detection"
             )
@@ -120,12 +117,12 @@ class TestContextAwareFiltering:
                 case['expected_is_security_tool'],
                 f"{case['description']}: is_security_tool detection"
             )
-    
+
     def test_file_filtering(self):
         """Test that files are correctly included/excluded based on profile"""
         print("\n📁 Testing File Filtering")
         print("-" * 60)
-        
+
         test_paths = [
             ('tests/test_injection.py', 'production', False, 'Test file in production'),
             ('tests/test_injection.py', 'development', True, 'Test file in development'),
@@ -139,7 +136,7 @@ class TestContextAwareFiltering:
             ('.git/config', 'production', False, 'Git in production'),
             ('build/output.js', 'production', False, 'Build dir in production'),
         ]
-        
+
         for path, profile, should_scan, description in test_paths:
             filter = SmartFilter(profile=profile)
             result = filter.should_scan_file(path)
@@ -148,15 +145,15 @@ class TestContextAwareFiltering:
                 should_scan,
                 f"{description}: {path} with {profile} profile"
             )
-    
+
     def test_threat_severity_adjustment(self):
         """Test that threat severity is correctly adjusted based on context"""
         print("\n⚠️ Testing Threat Severity Adjustment")
         print("-" * 60)
-        
+
         filter_prod = SmartFilter(profile='production')
         filter_dev = SmartFilter(profile='development')
-        
+
         # Critical vulnerability in test file
         test_threat = {
             'attack_vector': 'COMMAND_INJECTION',
@@ -166,7 +163,7 @@ class TestContextAwareFiltering:
             'line_numbers': [42],
             'confidence': 0.95
         }
-        
+
         # Should be ignored in production
         prod_filtered = filter_prod.filter_threats([test_threat], 'tests/test_exploit.py')
         self.assert_equal(
@@ -174,7 +171,7 @@ class TestContextAwareFiltering:
             0,
             "Critical threat in test file ignored in production"
         )
-        
+
         # Should be downgraded in development
         dev_filtered = filter_dev.filter_threats([test_threat], 'tests/test_exploit.py')
         if dev_filtered:
@@ -183,7 +180,7 @@ class TestContextAwareFiltering:
                 'HIGH',  # CRITICAL -> HIGH in development for test files
                 "Critical threat in test file downgraded in development"
             )
-        
+
         # Critical vulnerability in production code - should NOT be adjusted
         prod_threat = {
             'attack_vector': 'COMMAND_INJECTION',
@@ -193,7 +190,7 @@ class TestContextAwareFiltering:
             'line_numbers': [100],
             'confidence': 0.95
         }
-        
+
         prod_filtered = filter_prod.filter_threats([prod_threat], 'src/api_handler.py')
         self.assert_equal(
             len(prod_filtered),
@@ -205,7 +202,7 @@ class TestContextAwareFiltering:
             'CRITICAL',
             "Critical threat in production code NOT downgraded"
         )
-        
+
         # Medium obfuscation in security tool - should be downgraded
         security_threat = {
             'attack_vector': 'OBFUSCATION',
@@ -215,35 +212,35 @@ class TestContextAwareFiltering:
             'line_numbers': [50],
             'confidence': 0.7
         }
-        
+
         # Get context for security tool
         analyzer = ContextAnalyzer()
         security_content = 'import ast\nclass SecurityAnalyzer:\n    def analyze_threats(self): pass'
         context = analyzer.get_file_context('src/security_analyzer.py', security_content)
-        
+
         # Manually set as security tool for this test
         context.is_security_tool = True
         adjusted = filter_prod.adjust_threat_severity(security_threat.copy(), context)
-        
+
         # In production profile, security tool patterns may be downgraded
         if context.is_security_tool and 'variable' in security_threat['description']:
             expected_severity = 'LOW'  # Based on config
         else:
             expected_severity = 'MEDIUM'
-        
+
         self.assert_equal(
             adjusted.get('severity', 'MEDIUM'),
             expected_severity,
             "Obfuscation in security tool appropriately handled"
         )
-    
+
     def test_real_vulnerabilities_detected(self):
         """Ensure REAL vulnerabilities are still detected in production code"""
         print("\n🚨 Testing Real Vulnerability Detection")
         print("-" * 60)
-        
+
         filter = SmartFilter(profile='production')
-        
+
         # Real critical vulnerabilities that should NEVER be filtered
         critical_threats = [
             {
@@ -279,40 +276,40 @@ class TestContextAwareFiltering:
                 'confidence': 0.88
             }
         ]
-        
+
         for threat in critical_threats:
             filtered = filter.filter_threats([threat], threat['file_path'])
-            
+
             self.assert_equal(
                 len(filtered),
                 1,
                 f"Critical vulnerability NOT filtered: {threat['attack_vector']}"
             )
-            
+
             if filtered:
                 self.assert_equal(
                     filtered[0]['severity'],
                     threat['severity'],
                     f"Critical vulnerability severity preserved: {threat['attack_vector']}"
                 )
-    
+
     def test_profile_configuration(self):
         """Test that profiles are correctly loaded and applied"""
         print("\n⚙️ Testing Profile Configuration")
         print("-" * 60)
-        
+
         profiles = ['production', 'development', 'security-tool']
-        
+
         for profile_name in profiles:
             filter = SmartFilter(profile=profile_name)
             profile_info = filter.get_profile_info()
-            
+
             self.assert_equal(
                 profile_info['name'],
                 profile_name,
                 f"Profile {profile_name} loaded correctly"
             )
-            
+
             # Check that each profile has expected configuration
             has_excludes = profile_info.get('exclude_count', 0) > 0
             self.assert_equal(
@@ -320,14 +317,14 @@ class TestContextAwareFiltering:
                 True,
                 f"Profile {profile_name} has exclusion rules"
             )
-    
+
     def test_statistics_tracking(self):
         """Test that filtering statistics are correctly tracked"""
         print("\n📊 Testing Statistics Tracking")
         print("-" * 60)
-        
+
         filter = SmartFilter(profile='production')
-        
+
         # Process some files
         test_files = [
             'tests/test1.py',
@@ -336,12 +333,12 @@ class TestContextAwareFiltering:
             'src/api.py',
             'examples/demo.py'
         ]
-        
+
         for file_path in test_files:
             filter.should_scan_file(file_path)
-        
+
         stats = filter.get_stats()
-        
+
         # In production: tests and examples excluded (3), src included (2)
         self.assert_equal(
             stats['files_excluded'],
@@ -353,13 +350,13 @@ class TestContextAwareFiltering:
             2,
             "Correct number of files included"
         )
-    
+
     def run_all_tests(self):
         """Run all test methods"""
         print("\n" + "=" * 70)
         print("COMPREHENSIVE CONTEXT-AWARE FILTERING TEST SUITE")
         print("=" * 70)
-        
+
         # Run each test method
         self.test_context_detection()
         self.test_file_filtering()
@@ -367,7 +364,7 @@ class TestContextAwareFiltering:
         self.test_real_vulnerabilities_detected()
         self.test_profile_configuration()
         self.test_statistics_tracking()
-        
+
         # Print summary
         print("\n" + "=" * 70)
         print("TEST RESULTS SUMMARY")
@@ -375,23 +372,23 @@ class TestContextAwareFiltering:
         print(f"\n✅ Passed: {self.passed}")
         print(f"❌ Failed: {self.failed}")
         print(f"📊 Total:  {self.passed + self.failed}")
-        
+
         if self.failed > 0:
             print("\n⚠️ FAILED TESTS:")
             for result in self.results:
                 if result.startswith("❌"):
                     print(result)
-        
+
         success_rate = (self.passed / (self.passed + self.failed)) * 100 if (self.passed + self.failed) > 0 else 0
         print(f"\n🎯 Success Rate: {success_rate:.1f}%")
-        
+
         return self.failed == 0
 
 
 if __name__ == "__main__":
     tester = TestContextAwareFiltering()
     success = tester.run_all_tests()
-    
+
     if success:
         print("\n✅ ALL TESTS PASSED!")
         sys.exit(0)

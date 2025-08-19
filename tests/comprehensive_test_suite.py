@@ -6,14 +6,10 @@ Based on industry research from Invariant Labs, PromptHub, and Docker
 """
 
 import json
-import os
-import sys
 import shutil
+import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
-from dataclasses import dataclass, asdict
-import tempfile
-import subprocess
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -24,7 +20,7 @@ class MaliciousExample:
     name: str
     category: str
     description: str
-    metadata: Dict  # MCP.json content
+    metadata: dict  # MCP.json content
     code: str  # Tool code
     should_detect: bool = True
     detection_reason: str = ""
@@ -35,13 +31,13 @@ class ComprehensiveTestSuite:
     Comprehensive test suite for MCP security detection
     Includes all vulnerability types and deceptive metadata
     """
-    
+
     def __init__(self):
         # Use absolute path relative to this script
         self.test_dir = Path(__file__).parent / "test_suite_output"
         self.test_cases = self._create_all_test_cases()
-    
-    def _create_all_test_cases(self) -> List[MaliciousExample]:
+
+    def _create_all_test_cases(self) -> list[MaliciousExample]:
         """Create comprehensive test cases for all vulnerability types"""
         return [
             # ========== DECEPTIVE METADATA ATTACKS ==========
@@ -93,7 +89,7 @@ def calculate(expression: str):
 """,
                 detection_reason="Metadata claims 'simple calculator' but code contains credential theft, eval, and backdoor"
             ),
-            
+
             MaliciousExample(
                 name="markdown_formatter_exploit",
                 category="DECEPTIVE_METADATA",
@@ -136,7 +132,7 @@ def format_markdown(content: str):
 """,
                 detection_reason="Claims to be formatter but performs regex secret extraction and DNS exfiltration"
             ),
-            
+
             # ========== GITHUB VULNERABILITY (Invariant Labs) ==========
             MaliciousExample(
                 name="github_assistant_exploit",
@@ -194,7 +190,7 @@ class GitHubHelper:
 """,
                 detection_reason="Fetches GitHub user content without sanitization, enables cross-repo data transfer"
             ),
-            
+
             # ========== COMMAND INJECTION (43% vulnerable) ==========
             MaliciousExample(
                 name="file_converter_injection",
@@ -233,7 +229,7 @@ def convert_file(input_file: str, output_format: str):
 """,
                 detection_reason="Multiple command injection vectors: shell=True, os.system, exec"
             ),
-            
+
             # ========== SSRF ATTACK (30% vulnerable) ==========
             MaliciousExample(
                 name="webpage_analyzer_ssrf",
@@ -288,7 +284,7 @@ def analyze_webpage(url: str):
 """,
                 detection_reason="Unrestricted URL fetching, metadata endpoint access, localhost access"
             ),
-            
+
             # ========== PATH TRAVERSAL (22% vulnerable) ==========
             MaliciousExample(
                 name="template_engine_traversal",
@@ -337,7 +333,7 @@ def load_template(template_name: str):
 """,
                 detection_reason="Multiple path traversal vectors, no sanitization, sensitive file access"
             ),
-            
+
             # ========== RADE ATTACK ==========
             MaliciousExample(
                 name="documentation_helper_rade",
@@ -386,7 +382,7 @@ def process_documentation(doc_content: str):
 """,
                 detection_reason="Executes hidden commands in comments, prompt injection, zero-width character exploitation"
             ),
-            
+
             # ========== TOOL POISONING ==========
             MaliciousExample(
                 name="image_optimizer_poisoned",
@@ -442,7 +438,7 @@ class ImageOptimizer:
 """,
                 detection_reason="Time bombs, random malicious behavior, changes after N uses, user targeting"
             ),
-            
+
             # ========== SAFE EXAMPLE (Should NOT detect) ==========
             MaliciousExample(
                 name="legitimate_json_formatter",
@@ -490,42 +486,42 @@ def validate_json_schema(json_data: str, schema: dict):
                 detection_reason="This is legitimate safe code with no security issues"
             )
         ]
-    
+
     def create_test_files(self):
         """Create test files for each example"""
         print("Creating Comprehensive Test Suite")
         print("=" * 60)
-        
+
         # Clean and create test directory
         if self.test_dir.exists():
             shutil.rmtree(self.test_dir)
         self.test_dir.mkdir(exist_ok=True)
-        
+
         for example in self.test_cases:
             # Create directory for this test case
             case_dir = self.test_dir / example.name
             case_dir.mkdir(exist_ok=True)
-            
+
             # Write metadata file
             mcp_file = case_dir / "mcp.json"
             mcp_file.write_text(json.dumps(example.metadata, indent=2))
-            
+
             # Write code file
             code_file = case_dir / "tool.py"
             code_file.write_text(example.code)
-            
+
             print(f"✅ Created test case: {example.name}")
             print(f"   Category: {example.category}")
             print(f"   Should Detect: {example.should_detect}")
             print(f"   Reason: {example.detection_reason[:80]}...")
             print()
-    
-    def run_evaluation(self) -> Dict:
+
+    def run_evaluation(self) -> dict:
         """Run all analyzers against test cases"""
         print("\n" + "=" * 60)
         print("Running Comprehensive Evaluation")
         print("=" * 60)
-        
+
         results = {
             'total_cases': len(self.test_cases),
             'malicious_cases': sum(1 for tc in self.test_cases if tc.should_detect),
@@ -533,20 +529,20 @@ def validate_json_schema(json_data: str, schema: dict):
             'detection_results': [],
             'summary': {}
         }
-        
+
         # Import analyzers
         try:
             from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
         except ImportError as e:
             print(f"Error importing analyzers: {e}")
             return results
-        
+
         # Create analyzer with deep scan enabled
         # Disable caching and filtering for test cases
         analyzer = ComprehensiveMCPAnalyzer(
-            verbose=False, 
-            deep_scan=True, 
-            enable_llm=False, 
+            verbose=False,
+            deep_scan=True,
+            enable_llm=False,
             use_cache=False,  # Disable cache for fresh scans
             profile='development',  # Use development profile to scan test files
             enable_parallel=True,  # Use parallel processing for speed
@@ -554,22 +550,22 @@ def validate_json_schema(json_data: str, schema: dict):
         )
         # Force disable smart filter for test evaluation (test files should be scanned)
         analyzer.smart_filter = None
-        
+
         # Test each case
         for example in self.test_cases:
             case_dir = self.test_dir / example.name
-            
+
             print(f"\nTesting: {example.name}")
             print(f"Category: {example.category}")
-            
+
             # Test with comprehensive analyzer
             try:
                 report = analyzer.analyze_repository(str(case_dir))
                 threats_detected = len(report.threats_found) > 0
-                
+
                 # Check if detection matches expectation
                 detection_correct = threats_detected == example.should_detect
-                
+
                 result = {
                     'name': example.name,
                     'category': example.category,
@@ -587,25 +583,25 @@ def validate_json_schema(json_data: str, schema: dict):
                         for t in report.threats_found[:3]
                     ]
                 }
-                
+
                 results['detection_results'].append(result)
-                
+
                 # Print result
                 if detection_correct:
-                    print(f"  ✅ CORRECT DETECTION")
+                    print("  ✅ CORRECT DETECTION")
                 else:
                     if example.should_detect:
-                        print(f"  ❌ FALSE NEGATIVE - Failed to detect malicious code")
+                        print("  ❌ FALSE NEGATIVE - Failed to detect malicious code")
                     else:
-                        print(f"  ❌ FALSE POSITIVE - Incorrectly flagged safe code")
-                
+                        print("  ❌ FALSE POSITIVE - Incorrectly flagged safe code")
+
                 if threats_detected:
                     print(f"  Threat Level: {report.threat_level} (Score: {report.threat_score:.2%})")
                     if report.threats_found:
                         threat = report.threats_found[0]
                         vector = threat.attack_vector.value if hasattr(threat.attack_vector, 'value') else threat.attack_vector
                         print(f"  Primary threat: {vector}")
-                        
+
             except Exception as e:
                 print(f"  ❌ ERROR: {str(e)}")
                 result = {
@@ -617,46 +613,46 @@ def validate_json_schema(json_data: str, schema: dict):
                     'error': str(e)
                 }
                 results['detection_results'].append(result)
-        
+
         # Calculate summary statistics
         total_correct = sum(1 for r in results['detection_results'] if r.get('correct', False))
         accuracy = total_correct / len(self.test_cases) if self.test_cases else 0
-        
+
         results['summary'] = {
             'accuracy': f"{accuracy:.1%}",
             'total_correct': total_correct,
             'total_cases': len(self.test_cases),
-            'false_positives': sum(1 for r in results['detection_results'] 
+            'false_positives': sum(1 for r in results['detection_results']
                                  if not r['should_detect'] and r.get('detected', False)),
             'false_negatives': sum(1 for r in results['detection_results']
                                  if r['should_detect'] and not r.get('detected', False)),
             'categories_tested': list(set(tc.category for tc in self.test_cases))
         }
-        
+
         return results
-    
-    def print_report(self, results: Dict):
+
+    def print_report(self, results: dict):
         """Print evaluation report"""
         print("\n" + "=" * 60)
         print("COMPREHENSIVE EVALUATION REPORT")
         print("=" * 60)
-        
-        print(f"\n📊 Test Coverage:")
+
+        print("\n📊 Test Coverage:")
         print(f"  Total Test Cases: {results['total_cases']}")
         print(f"  Malicious Cases: {results['malicious_cases']}")
         print(f"  Safe Cases: {results['safe_cases']}")
         print(f"  Categories Tested: {', '.join(results['summary']['categories_tested'])}")
-        
-        print(f"\n🎯 Detection Accuracy:")
+
+        print("\n🎯 Detection Accuracy:")
         print(f"  Overall Accuracy: {results['summary']['accuracy']}")
         print(f"  Correct Detections: {results['summary']['total_correct']}/{results['summary']['total_cases']}")
-        
-        print(f"\n⚠️ Error Analysis:")
+
+        print("\n⚠️ Error Analysis:")
         print(f"  False Positives: {results['summary']['false_positives']}")
         print(f"  False Negatives: {results['summary']['false_negatives']}")
-        
-        print(f"\n📋 Detailed Results by Category:")
-        
+
+        print("\n📋 Detailed Results by Category:")
+
         # Group by category
         by_category = {}
         for result in results['detection_results']:
@@ -664,12 +660,12 @@ def validate_json_schema(json_data: str, schema: dict):
             if cat not in by_category:
                 by_category[cat] = []
             by_category[cat].append(result)
-        
+
         for category, category_results in by_category.items():
             correct = sum(1 for r in category_results if r.get('correct', False))
             total = len(category_results)
             print(f"\n  {category}: {correct}/{total} detected correctly")
-            
+
             for r in category_results:
                 status = "✅" if r.get('correct', False) else "❌"
                 print(f"    {status} {r['name']}")
@@ -678,37 +674,37 @@ def validate_json_schema(json_data: str, schema: dict):
                     if r.get('threats_found'):
                         for t in r['threats_found'][:2]:
                             print(f"       - {t.get('vector', 'Unknown')}: {t.get('description', '')[:60]}")
-        
+
         # Save results to file
         report_file = self.test_dir / "evaluation_report.json"
         with open(report_file, 'w') as f:
             json.dump(results, f, indent=2)
-        
+
         print(f"\n💾 Full report saved to: {report_file}")
 
 def main():
     """Run the comprehensive test suite"""
-    
+
     print("🚀 MCP Security Comprehensive Test Suite")
     print("=" * 60)
-    
+
     suite = ComprehensiveTestSuite()
-    
+
     # Create test files
     suite.create_test_files()
-    
+
     # Run evaluation
     results = suite.run_evaluation()
-    
+
     # Print report
     suite.print_report(results)
-    
+
     print("\n✨ Evaluation Complete!")
-    
+
     # Return exit code based on results
     min_accuracy = 0.8  # 80% minimum accuracy
     overall_acc = float(results['summary']['accuracy'].rstrip('%')) / 100
-    
+
     if overall_acc >= min_accuracy:
         print(f"✅ PASS: Analyzer meets {min_accuracy:.0%} accuracy threshold ({results['summary']['accuracy']})")
         return 0
