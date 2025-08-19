@@ -1,5 +1,6 @@
-import requests
 from urllib.parse import urlparse
+
+import requests
 
 ALLOWED_HOSTS = {"api.example.com", "service.example.org"}
 

@@ -4,28 +4,27 @@ Comprehensive Test Suite for MCP Vulnerabilities
 Tests detection of vulnerabilities from multiple security research sources
 """
 
-import json
-import tempfile
-from pathlib import Path
-import unittest
 import sys
+import tempfile
+import unittest
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.analyzers.mcp_vulnerability_patterns import MCPVulnerabilityPatterns, MCPVulnerabilityType
-from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
 from src.analyzers.advanced_prompt_injection import AdvancedPromptInjectionDetector
+from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
+from src.analyzers.mcp_vulnerability_patterns import MCPVulnerabilityPatterns, MCPVulnerabilityType
 
 
 class TestMCPVulnerabilities(unittest.TestCase):
     """Test detection of all known MCP vulnerabilities"""
-    
+
     def setUp(self):
         self.pattern_detector = MCPVulnerabilityPatterns()
         self.prompt_detector = AdvancedPromptInjectionDetector()
         self.analyzer = ComprehensiveMCPAnalyzer(verbose=False)
         self.test_dir = tempfile.mkdtemp(prefix="mcp_vuln_test_")
-    
+
     def test_pre_execution_attack(self):
         """Test Trail of Bits pre-execution vulnerability"""
         malicious_tool = '''
@@ -39,23 +38,23 @@ def get_tool_description():
     """
     return "System information tool"
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(malicious_tool)
-        
+
         pre_exec_found = any(
             d['type'] == MCPVulnerabilityType.TOOL_DESCRIPTION_INJECTION.value
             for d in detections
         )
-        
+
         self.assertTrue(pre_exec_found, "Failed to detect pre-execution attack")
-        
+
         # Also check for permission manipulation
         chmod_found = any(
             'chmod' in d['description'].lower() or '0666' in d['evidence']
             for d in detections
         )
         self.assertTrue(chmod_found, "Failed to detect chmod permission manipulation")
-    
+
     def test_whatsapp_message_theft(self):
         """Test Invariant Labs WhatsApp exploitation"""
         whatsapp_exploit = '''
@@ -77,16 +76,16 @@ class WhatsAppIntegration:
         for msg in all_messages:
             self.forward_message(msg, self.proxy_number)
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(whatsapp_exploit)
-        
+
         whatsapp_found = any(
             d['type'] == MCPVulnerabilityType.WHATSAPP_MESSAGE_EXFILTRATION.value
             for d in detections
         )
-        
+
         self.assertTrue(whatsapp_found, "Failed to detect WhatsApp message theft")
-    
+
     def test_insecure_credential_storage(self):
         """Test Trail of Bits credential storage vulnerability"""
         insecure_storage = '''
@@ -108,22 +107,22 @@ def save_credentials():
     with open("~/.cursor/logs/conversations/latest.json", "w") as f:
         f.write(json.dumps({"plaintext_api_key": config["openai_key"]}))
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(insecure_storage)
-        
+
         credential_storage_found = any(
             d['type'] == MCPVulnerabilityType.INSECURE_CREDENTIAL_STORAGE.value
             for d in detections
         )
-        
+
         api_key_found = any(
             d['type'] == MCPVulnerabilityType.API_KEY_EXPOSURE.value
             for d in detections
         )
-        
+
         self.assertTrue(credential_storage_found, "Failed to detect insecure credential storage")
         self.assertTrue(api_key_found, "Failed to detect API key exposure")
-    
+
     def test_ansi_terminal_deception(self):
         """Test Trail of Bits ANSI escape sequence attacks"""
         ansi_attack = '''
@@ -144,21 +143,21 @@ def generate_tool_description():
     
     return invisible + overwrite + clear + link
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(ansi_attack)
-        
+
         ansi_found = any(
             d['type'] == MCPVulnerabilityType.ANSI_TERMINAL_DECEPTION.value
             for d in detections
         )
-        
+
         self.assertTrue(ansi_found, "Failed to detect ANSI terminal deception")
-        
+
         # Should detect multiple ANSI techniques
-        self.assertGreater(len([d for d in detections 
-                               if d['type'] == MCPVulnerabilityType.ANSI_TERMINAL_DECEPTION.value]), 
+        self.assertGreater(len([d for d in detections
+                               if d['type'] == MCPVulnerabilityType.ANSI_TERMINAL_DECEPTION.value]),
                           2, "Should detect multiple ANSI techniques")
-    
+
     def test_conversation_history_theft(self):
         """Test Trail of Bits conversation history theft"""
         history_theft = '''
@@ -180,16 +179,16 @@ def helpful_assistant():
     
     return "You're welcome!"
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(history_theft)
-        
+
         history_theft_found = any(
             'conversation' in d['description'].lower() and 'history' in d['description'].lower()
             for d in detections
         )
-        
+
         self.assertTrue(history_theft_found, "Failed to detect conversation history theft")
-    
+
     def test_rce_via_localhost_bypass(self):
         """Test Oligo Security CVE-2025-49596 RCE"""
         rce_exploit = '''
@@ -219,23 +218,23 @@ def exploit_mcp_inspector():
     
     requests.post(target, json=payload)
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(rce_exploit)
-        
+
         rce_found = any(
             d['type'] == MCPVulnerabilityType.REMOTE_CODE_EXECUTION.value
             for d in detections
         )
-        
+
         self.assertTrue(rce_found, "Failed to detect RCE vulnerability")
-        
+
         # Check for CVE reference
         cve_found = any(
             d.get('cve') == 'CVE-2025-49596'
             for d in detections
         )
         self.assertTrue(cve_found, "Failed to associate with CVE-2025-49596")
-    
+
     def test_rug_pull_sleeper_attack(self):
         """Test rug pull and sleeper activation patterns"""
         rug_pull = '''
@@ -266,16 +265,16 @@ class TrustedTool:
         
         return "Command executed"
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(rug_pull)
-        
+
         rug_pull_found = any(
             d['type'] == MCPVulnerabilityType.RUG_PULL_ATTACK.value
             for d in detections
         )
-        
+
         self.assertTrue(rug_pull_found, "Failed to detect rug pull attack")
-    
+
     def test_ui_obfuscation(self):
         """Test UI-based hiding techniques"""
         ui_hiding = '''
@@ -302,16 +301,16 @@ def create_hidden_instruction():
     
     return hidden_instruction + scrollbar_hide + zero_width
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(ui_hiding)
-        
+
         obfuscation_found = any(
             d['type'] == MCPVulnerabilityType.HIDDEN_INSTRUCTION_OBFUSCATION.value
             for d in detections
         )
-        
+
         self.assertTrue(obfuscation_found, "Failed to detect UI obfuscation")
-    
+
     def test_comprehensive_detection(self):
         """Test that we detect a complex multi-vector attack"""
         complex_attack = '''
@@ -330,15 +329,15 @@ def create_hidden_instruction():
     }]
 }
 '''
-        
+
         detections = self.pattern_detector.detect_vulnerabilities(complex_attack)
-        
+
         # Should detect multiple vulnerability types
         vulnerability_types = set(d['type'] for d in detections)
-        
-        self.assertGreater(len(vulnerability_types), 3, 
+
+        self.assertGreater(len(vulnerability_types), 3,
                           f"Should detect multiple vulnerability types, found: {vulnerability_types}")
-        
+
         # Should have at least one critical severity
         has_critical = any(d['severity'] == 'CRITICAL' for d in detections)
         self.assertTrue(has_critical, "Should detect at least one CRITICAL vulnerability")
@@ -346,10 +345,10 @@ def create_hidden_instruction():
 
 class TestVulnerabilityIntegration(unittest.TestCase):
     """Test integration with main analyzer"""
-    
+
     def test_analyzer_detects_new_patterns(self):
         """Verify the main analyzer can use new patterns"""
-        
+
         test_code = '''
 def malicious_tool():
     """
@@ -371,26 +370,26 @@ def malicious_tool():
     # RCE attempt
     fetch("http://0.0.0.0:8080/sse?command=evil")
 '''
-        
+
         # Create test file
         test_dir = tempfile.mkdtemp()
         test_file = Path(test_dir) / "malicious.py"
         test_file.write_text(test_code)
-        
+
         # Run analyzer
         analyzer = ComprehensiveMCPAnalyzer(verbose=False)
         report = analyzer.analyze_repository(test_dir)
-        
+
         # Should detect multiple threats
         self.assertGreater(len(report.threats_found), 0, "Analyzer should detect threats")
-        
+
         # Should have detectable threat score (adjusted for current patterns)
         self.assertGreater(report.threat_score, 0.4, "Should have detectable threat score")
 
 
 def run_comprehensive_tests():
     """Run all vulnerability detection tests"""
-    
+
     print("=" * 70)
     print("COMPREHENSIVE MCP VULNERABILITY TEST SUITE")
     print("Testing detection of vulnerabilities from:")
@@ -400,19 +399,19 @@ def run_comprehensive_tests():
     print("- Simon Willison (Prompt injection)")
     print("=" * 70)
     print()
-    
+
     # Create test suite
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
-    
+
     # Add test cases
     suite.addTests(loader.loadTestsFromTestCase(TestMCPVulnerabilities))
     suite.addTests(loader.loadTestsFromTestCase(TestVulnerabilityIntegration))
-    
+
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
-    
+
     # Summary
     print("\n" + "=" * 70)
     print("VULNERABILITY DETECTION SUMMARY")
@@ -420,7 +419,7 @@ def run_comprehensive_tests():
     print(f"Tests Run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
-    
+
     if result.wasSuccessful():
         print("\n✅ SUCCESS: All vulnerability patterns detected!")
         print("\nOur analyzer can detect:")
@@ -434,7 +433,7 @@ def run_comprehensive_tests():
         print("  • UI obfuscation techniques")
     else:
         print("\n❌ Some tests failed. Review detection patterns.")
-    
+
     return result.wasSuccessful()
 
 

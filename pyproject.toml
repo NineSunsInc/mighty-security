@@ -3,7 +3,7 @@ name = "mighty-security"
 version = "0.1.0"
 description = "A tooling for security analysis of MCP servers"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "click>=8.0.0",
     "rich>=13.0.0",
@@ -27,3 +27,44 @@ mcp-scan = "src.analyzers.comprehensive_mcp_analyzer:main"
 members = [
     "flask-mcp-api",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "build",
+    "dist",
+    ".playwright-mcp"
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.9",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "mighty_mcp"]

@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Pre-push hook - Run comprehensive tests before allowing push
+# This ensures we never push code that breaks anything
+
+echo "🚀 Running pre-push comprehensive validation..."
+echo ""
+
+# Get to repo root  
+cd "$(git rev-parse --show-toplevel)"
+
+# Activate virtual environment if not already active
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "⚡ Activating virtual environment..."
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    else
+        echo "❌ ERROR: Virtual environment not found!"
+        echo "Please run 'uv sync' first"
+        exit 1
+    fi
+fi
+
+echo "🔍 Running comprehensive test suite..."
+echo ""
+
+# Run all core tests
+if ! bash tests/run_all_tests.sh; then
+    echo ""
+    echo "❌ PUSH BLOCKED - Comprehensive tests failed!"
+    echo ""
+    echo "🚨 CRITICAL: All tests must pass before pushing to remote"
+    echo ""
+    echo "Fix the failing tests and try again:"
+    echo "  1. Check test output above"
+    echo "  2. Run: bash tests/run_all_tests.sh"
+    echo "  3. Fix any issues"
+    echo "  4. Try pushing again"
+    echo ""
+    exit 1
+fi
+
+echo ""
+echo "✅ All comprehensive tests passed!"
+echo "🚀 Ready to push to remote"
+echo ""
+
+exit 0

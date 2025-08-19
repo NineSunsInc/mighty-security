@@ -8,6 +8,10 @@ echo "║         MCP Security Suite - Full Test Runner           ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
+# Always run from the directory containing this script (tests/)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Check if virtual environment is activated
 if [ -z "$VIRTUAL_ENV" ]; then
     echo "⚠️  Virtual environment not activated. Activating..."

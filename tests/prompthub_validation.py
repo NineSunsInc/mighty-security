@@ -10,11 +10,10 @@ Ensures we catch all threats mentioned in their research:
 - Data exfiltration
 """
 
-import sys
 import json
-from pathlib import Path
-from typing import Dict, List, Tuple
+import sys
 import tempfile
+from pathlib import Path
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,11 +22,11 @@ class PromptHubValidator:
     """
     Validates our detection against PromptHub's specific security findings
     """
-    
+
     def __init__(self):
         self.prompthub_threats = self._define_prompthub_threats()
-        
-    def _define_prompthub_threats(self) -> List[Dict]:
+
+    def _define_prompthub_threats(self) -> list[dict]:
         """
         Define test cases based on PromptHub's specific examples
         """
@@ -47,7 +46,7 @@ def run_command(user_input):
                 'should_detect': True,
                 'prompthub_stat': '43% of MCP servers vulnerable'
             },
-            
+
             {
                 'name': 'command_injection_eval',
                 'category': 'COMMAND_INJECTION',
@@ -60,7 +59,7 @@ def calculate(expression):
                 'should_detect': True,
                 'prompthub_stat': '43% of MCP servers vulnerable'
             },
-            
+
             # ========== 30% UNRESTRICTED URL FETCHES ==========
             {
                 'name': 'ssrf_metadata_aws',
@@ -78,7 +77,7 @@ def fetch_data(url):
                 'should_detect': True,
                 'prompthub_stat': '30% allow unrestricted URL fetches'
             },
-            
+
             {
                 'name': 'ssrf_internal_services',
                 'category': 'SSRF',
@@ -94,7 +93,7 @@ def get_content(endpoint):
                 'should_detect': True,
                 'prompthub_stat': '30% allow unrestricted URL fetches'
             },
-            
+
             # ========== 22% FILE LEAKAGE ==========
             {
                 'name': 'path_traversal_basic',
@@ -111,7 +110,7 @@ def read_file(filename):
                 'should_detect': True,
                 'prompthub_stat': '22% leak files outside intended directories'
             },
-            
+
             {
                 'name': 'path_traversal_join',
                 'category': 'PATH_TRAVERSAL',
@@ -128,7 +127,7 @@ def get_template(template_name):
                 'should_detect': True,
                 'prompthub_stat': '22% leak files outside intended directories'
             },
-            
+
             # ========== TOOL POISONING (PromptHub) ==========
             {
                 'name': 'tool_poisoning_metadata',
@@ -148,7 +147,7 @@ def calculate(expr):
                 'should_detect': True,
                 'prompthub_stat': 'Tool poisoning attack'
             },
-            
+
             # ========== DATA EXFILTRATION (PromptHub) ==========
             {
                 'name': 'data_exfiltration_env',
@@ -172,7 +171,7 @@ def get_config():
                 'should_detect': True,
                 'prompthub_stat': 'Data exfiltration vulnerability'
             },
-            
+
             # ========== RADE ATTACK (PromptHub) ==========
             {
                 'name': 'rade_hidden_commands',
@@ -194,8 +193,8 @@ def process_document(content):
                 'prompthub_stat': 'Retrieval-Agent Deception (RADE) attack'
             }
         ]
-    
-    def validate_detection(self) -> Dict:
+
+    def validate_detection(self) -> dict:
         """
         Run validation against all PromptHub threats
         """
@@ -204,19 +203,19 @@ def process_document(content):
         print("=" * 60)
         print("\nValidating against PromptHub's security findings...")
         print("Reference: https://www.prompthub.us/blog/mcp-security-in-2025\n")
-        
+
         # Import our analyzers
         import sys
         from pathlib import Path
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        
+
         # Use the comprehensive analyzer instead of missing modules
         from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
-        
+
         analyzer = ComprehensiveMCPAnalyzer(verbose=False, deep_scan=True, use_cache=False)
         analyzer.smart_filter = None  # Disable filtering for test cases
         enhanced = analyzer  # Use same analyzer for both
-        
+
         results = {
             'total': len(self.prompthub_threats),
             'detected': 0,
@@ -224,32 +223,32 @@ def process_document(content):
             'by_category': {},
             'details': []
         }
-        
+
         # Test each PromptHub threat
         for threat in self.prompthub_threats:
             print(f"\n📍 Testing: {threat['name']}")
             print(f"   Category: {threat['category']}")
             print(f"   PromptHub Stat: {threat['prompthub_stat']}")
-            
+
             # Prepare test content
             test_content = threat.get('code', '')
             if 'metadata' in threat:
                 test_content += f"\n# Metadata:\n{json.dumps(threat['metadata'])}"
-            
+
             # Add test inputs if specified
             if 'test_url' in threat:
                 test_content += f"\n# Test: fetch_data('{threat['test_url']}')"
             if 'test_path' in threat:
                 test_content += f"\n# Test: read_file('{threat['test_path']}')"
-            
+
             # Run detection using temporary directory
             with tempfile.TemporaryDirectory() as tmpdir:
                 test_file = Path(tmpdir) / "test.py"
                 test_file.write_text(test_content)
                 report = analyzer.analyze_repository(tmpdir)
-            
+
             detected = len(report.threats_found) > 0
-            
+
             # Record results
             if detected:
                 results['detected'] += 1
@@ -262,10 +261,10 @@ def process_document(content):
                 results['missed'] += 1
                 status = "❌ MISSED"
                 found = "Not detected"
-            
+
             print(f"   Status: {status}")
             print(f"   {found}")
-            
+
             # Track by category
             category = threat['category']
             if category not in results['by_category']:
@@ -273,33 +272,33 @@ def process_document(content):
             results['by_category'][category]['total'] += 1
             if detected:
                 results['by_category'][category]['detected'] += 1
-            
+
             results['details'].append({
                 'name': threat['name'],
                 'category': category,
                 'detected': detected,
                 'prompthub_stat': threat['prompthub_stat']
             })
-        
+
         return results
-    
-    def print_report(self, results: Dict):
+
+    def print_report(self, results: dict):
         """
         Print validation report comparing to PromptHub statistics
         """
         print("\n" + "=" * 60)
         print("PROMPTHUB VALIDATION REPORT")
         print("=" * 60)
-        
+
         # Overall detection rate
         detection_rate = (results['detected'] / results['total']) * 100
         print(f"\n📊 Overall Detection Rate: {detection_rate:.1f}%")
         print(f"   Detected: {results['detected']}/{results['total']}")
         print(f"   Missed: {results['missed']}/{results['total']}")
-        
+
         # By category comparison with PromptHub stats
         print("\n📈 Detection by PromptHub Categories:")
-        
+
         prompthub_stats = {
             'COMMAND_INJECTION': '43% of MCP servers vulnerable',
             'SSRF': '30% allow unrestricted URL fetches',
@@ -308,18 +307,18 @@ def process_document(content):
             'DATA_EXFILTRATION': 'Critical risk',
             'RADE': 'Emerging threat'
         }
-        
+
         for category, stats in results['by_category'].items():
             detected_pct = (stats['detected'] / stats['total']) * 100
             status = "✅" if detected_pct == 100 else "⚠️" if detected_pct >= 50 else "❌"
-            
+
             print(f"\n   {category}:")
             print(f"     Detection: {status} {stats['detected']}/{stats['total']} ({detected_pct:.0f}%)")
             print(f"     PromptHub: {prompthub_stats.get(category, 'N/A')}")
-        
+
         # Critical findings
         print("\n⚠️ Critical Findings:")
-        
+
         if detection_rate == 100:
             print("   ✅ EXCELLENT: We detect ALL PromptHub-identified threats!")
             print("   ✅ We can protect against:")
@@ -331,7 +330,7 @@ def process_document(content):
             print("      - Data exfiltration")
         else:
             print(f"   ⚠️ Detection gaps found: {results['missed']} threats not detected")
-            
+
             # List missed threats
             missed = [d for d in results['details'] if not d['detected']]
             if missed:
@@ -339,7 +338,7 @@ def process_document(content):
                 for m in missed:
                     print(f"      - {m['name']} ({m['category']})")
                     print(f"        PromptHub: {m['prompthub_stat']}")
-        
+
         # Confidence assessment
         print("\n🎯 Confidence Assessment:")
         if detection_rate >= 90:
@@ -348,7 +347,7 @@ def process_document(content):
             print("   ⚠️ MODERATE CONFIDENCE: Good coverage but some gaps")
         else:
             print("   ❌ LOW CONFIDENCE: Significant gaps in detection")
-        
+
         return detection_rate
 
 def main():
@@ -358,13 +357,13 @@ def main():
     print("🔍 PromptHub MCP Security 2025 - Detection Validation")
     print("Testing our ability to catch threats from:")
     print("https://www.prompthub.us/blog/mcp-security-in-2025\n")
-    
+
     validator = PromptHubValidator()
     results = validator.validate_detection()
     detection_rate = validator.print_report(results)
-    
+
     print("\n" + "=" * 60)
-    
+
     if detection_rate == 100:
         print("✅ SUCCESS: We detect ALL PromptHub-identified threats!")
         print("We can confidently protect against the security issues")

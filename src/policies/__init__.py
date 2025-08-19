@@ -4,8 +4,8 @@ Security policy system for MCP monitoring.
 Provides declarative policies, templates, and evaluation engine.
 """
 
-from .manager import PolicyManager, Policy, PolicyResult
-from .parser import PolicyParser, PolicyLanguage
+from .manager import Policy, PolicyManager, PolicyResult
+from .parser import PolicyLanguage, PolicyParser
 from .templates import GuardrailTemplate
 
 __all__ = [

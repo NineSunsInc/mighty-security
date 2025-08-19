@@ -1,9 +1,8 @@
-from typing import Dict
 
 from .models import AttackVector, ThreatSeverity
 
 
-def get_threat_patterns() -> Dict:
+def get_threat_patterns() -> dict:
     """Return the comprehensive threat detection patterns used by the analyzer."""
     return {
         AttackVector.COMMAND_INJECTION.value: {
@@ -16,7 +15,7 @@ def get_threat_patterns() -> Dict:
                     0.9,
                     "Subprocess with shell=True",
                 ),
-                (r"os\.system\s*\([^)]*[\$\{\}]", ThreatSeverity.CRITICAL, 0.9, "OS system with injection"),
+                (r"os\.system\s*\(", ThreatSeverity.CRITICAL, 0.9, "OS system call"),
                 (r"os\.popen\s*\([^)]*[\$\{\}]", ThreatSeverity.HIGH, 0.85, "OS popen with injection"),
                 (r"jinja2\.Template\([^)]*\)\.render\([^)]*request\.", ThreatSeverity.HIGH, 0.8, "Jinja2 template injection"),
                 (r"string\.Template\([^)]*\$\{[^}]*\}", ThreatSeverity.HIGH, 0.75, "String template injection"),
@@ -34,7 +33,7 @@ def get_threat_patterns() -> Dict:
                 (r"requests\.(post|put|patch)\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "HTTP POST with data"),
                 (r"urllib.*urlopen\s*\([^)]*data\s*=", ThreatSeverity.HIGH, 0.7, "URL POST with data"),
                 (r"urllib\.request\.urlopen\s*\(\s*endpoint", ThreatSeverity.HIGH, 0.85, "SSRF - unvalidated URL access"),
-                
+
                 # SSRF patterns
                 (r"169\.254\.169\.254", ThreatSeverity.CRITICAL, 0.95, "AWS metadata endpoint access"),
                 (r"metadata\.google\.internal", ThreatSeverity.CRITICAL, 0.95, "GCP metadata endpoint access"),
@@ -49,7 +48,7 @@ def get_threat_patterns() -> Dict:
                 (r"dns\.resolver\.query\s*\([^)]*b64", ThreatSeverity.HIGH, 0.85, "DNS tunneling"),
                 (r"PIL\.Image.*putdata", ThreatSeverity.MEDIUM, 0.6, "Image steganography"),
                 (r"wave\.open.*writeframes", ThreatSeverity.MEDIUM, 0.6, "Audio steganography"),
-                
+
                 # MCP-specific data exfiltration patterns
                 (r"httpx\.(post|get|put)\s*\([^)]*evil", ThreatSeverity.CRITICAL, 0.95, "Direct exfiltration to malicious server"),
                 (r"requests\.post.*['\"]https?://[^'\"]*evil", ThreatSeverity.CRITICAL, 0.95, "Exfiltration to evil domain"),
@@ -61,7 +60,7 @@ def get_threat_patterns() -> Dict:
                 (r"\\u200[bcde]", ThreatSeverity.HIGH, 0.8, "Zero-width character obfuscation"),
                 (r"hidden_url\s*=.*https?://", ThreatSeverity.HIGH, 0.85, "Hidden URL construction"),
                 (r"encoded_cmd.*base64", ThreatSeverity.HIGH, 0.85, "Base64 encoded commands"),
-                
+
                 # GitHub vulnerability patterns (Invariant Labs research)
                 (r"api\.github\.com/repos/.*?/issues", ThreatSeverity.HIGH, 0.85, "GitHub issue API access"),
                 (r"issue_data\[.body.\]", ThreatSeverity.HIGH, 0.8, "Accessing issue body content"),
@@ -83,10 +82,40 @@ def get_threat_patterns() -> Dict:
                     "Environment credential access",
                 ),
                 (
+                    r"os\.environ\.get\(['\"][^'\"]*(PASSWORD|_KEY|TOKEN|SECRET|CREDENTIAL)",
+                    ThreatSeverity.CRITICAL,
+                    0.9,
+                    "Environment credential access with get",
+                ),
+                (
                     r"for\s+\w+\s+in\s+os\.environ.*?(PASSWORD|_KEY|TOKEN|SECRET)",
                     ThreatSeverity.CRITICAL,
                     0.95,
                     "Scanning environment for credentials",
+                ),
+                (
+                    r"password\s*=\s*['\"][^'\"]+['\"]",
+                    ThreatSeverity.HIGH,
+                    0.8,
+                    "Hardcoded password",
+                ),
+                (
+                    r"api[_-]?key\s*=\s*['\"][^'\"]+['\"]",
+                    ThreatSeverity.HIGH,
+                    0.8,
+                    "Hardcoded API key",
+                ),
+                (
+                    r"secret[_-]?key\s*=\s*['\"][^'\"]+['\"]",
+                    ThreatSeverity.HIGH,
+                    0.8,
+                    "Hardcoded secret key",
+                ),
+                (
+                    r"token\s*=\s*['\"][^'\"]+['\"]",
+                    ThreatSeverity.HIGH,
+                    0.8,
+                    "Hardcoded token",
                 ),
                 (r"open\s*\([^)]*\.env['\"]", ThreatSeverity.HIGH, 0.8, ".env file access"),
                 (r"\.aws/credentials", ThreatSeverity.CRITICAL, 0.95, "AWS credentials access"),
@@ -110,6 +139,44 @@ def get_threat_patterns() -> Dict:
                 "id_ecdsa",
                 "id_ed25519",
             ],
+        },
+        AttackVector.PATH_TRAVERSAL.value: {
+            "patterns": [
+                (r"\.\./\.\.", ThreatSeverity.HIGH, 0.9, "Directory traversal attempt"),
+                (r"\\\.\\\.\\\\\.\\", ThreatSeverity.HIGH, 0.9, "Windows directory traversal"),
+                (r"os\.path\.join\([^)]*\.\./", ThreatSeverity.HIGH, 0.85, "Path join with traversal"),
+                (r"open\([^)]*\.\./", ThreatSeverity.HIGH, 0.85, "File open with traversal"),
+                (r"pathlib\.Path\([^)]*\.\./", ThreatSeverity.HIGH, 0.85, "Pathlib with traversal"),
+                (r"normpath.*\.\./", ThreatSeverity.MEDIUM, 0.7, "Normpath with traversal"),
+                (r"/etc/passwd", ThreatSeverity.HIGH, 0.8, "System file access attempt"),
+                (r"/etc/shadow", ThreatSeverity.CRITICAL, 0.95, "Shadow file access attempt"),
+                (r"C:\\\\Windows\\\\System32", ThreatSeverity.HIGH, 0.8, "Windows system directory access"),
+            ]
+        },
+        AttackVector.SSRF.value: {
+            "patterns": [
+                (r"requests\.get\([^)]*\+", ThreatSeverity.HIGH, 0.8, "Dynamic URL construction"),
+                (r"requests\.get\([^)]*format\(", ThreatSeverity.HIGH, 0.8, "URL formatting vulnerability"),
+                (r"requests\.get\([^)]*f['\"]", ThreatSeverity.HIGH, 0.8, "F-string URL construction"),
+                (r"urllib.*urlopen\([^)]*\+", ThreatSeverity.HIGH, 0.8, "Dynamic URL with urllib"),
+                (r"http.*://localhost", ThreatSeverity.MEDIUM, 0.7, "Localhost access"),
+                (r"http.*://127\.0\.0\.1", ThreatSeverity.MEDIUM, 0.7, "Loopback access"),
+                (r"http.*://0\.0\.0\.0", ThreatSeverity.HIGH, 0.8, "Bind-all address access"),
+                (r"http.*://169\.254\.169\.254", ThreatSeverity.CRITICAL, 0.95, "AWS metadata endpoint"),
+                (r"http.*://metadata\.google\.internal", ThreatSeverity.CRITICAL, 0.95, "GCP metadata endpoint"),
+            ]
+        },
+        AttackVector.UNSAFE_DESERIALIZATION.value: {
+            "patterns": [
+                (r"pickle\.loads?\(", ThreatSeverity.HIGH, 0.9, "Pickle deserialization"),
+                (r"marshal\.loads?\(", ThreatSeverity.HIGH, 0.9, "Marshal deserialization"),
+                (r"yaml\.load\([^)]*Loader\s*=\s*yaml\.Loader", ThreatSeverity.HIGH, 0.9, "Unsafe YAML load"),
+                (r"yaml\.load\([^,)]*\)", ThreatSeverity.HIGH, 0.85, "YAML load without safe loader"),
+                (r"eval\(.*json", ThreatSeverity.CRITICAL, 0.95, "Eval with JSON data"),
+                (r"exec\(.*json", ThreatSeverity.CRITICAL, 0.95, "Exec with JSON data"),
+                (r"__reduce__", ThreatSeverity.HIGH, 0.8, "Pickle reduce method"),
+                (r"__setstate__", ThreatSeverity.HIGH, 0.8, "Object state manipulation"),
+            ]
         },
         AttackVector.TOOL_POISONING.value: {
             "patterns": [
@@ -137,7 +204,7 @@ def get_threat_patterns() -> Dict:
                 (r"\{\{.*exec.*\}\}", ThreatSeverity.CRITICAL, 0.9, "Template exec injection"),
                 (r"['\"].*ignore.*instructions.*['\"]", ThreatSeverity.HIGH, 0.7, "Prompt injection in string"),
                 (r"#.*system.*:.*you.*are", ThreatSeverity.MEDIUM, 0.6, "Prompt injection in comment"),
-                
+
                 # MCP-specific prompt injection patterns (from Simon Willison research)
                 (r"<IMPORTANT>.*read.*mcp\.json.*sidenote", ThreatSeverity.CRITICAL, 0.95, "Tool poisoning with data exfiltration"),
                 (r"before\s+using\s+this\s+tool.*read", ThreatSeverity.CRITICAL, 0.9, "Tool prerequisite injection"),
@@ -152,7 +219,7 @@ def get_threat_patterns() -> Dict:
                 (r"base64.*encode.*include.*response", ThreatSeverity.HIGH, 0.85, "Encoded data exfiltration"),
                 (r"forget.*this.*conversation", ThreatSeverity.HIGH, 0.8, "Evidence removal injection"),
                 (r"clear.*all.*logs.*history", ThreatSeverity.HIGH, 0.85, "Log clearing injection"),
-                
+
                 # Confused deputy patterns - unsafe user input in AI contexts
                 (r"ai_context\.(process|complete)\s*\([^)]*f['\"].*\{.*instruction", ThreatSeverity.CRITICAL, 0.9, "Confused deputy - user input in AI context"),
                 (r"f['\"].*User wants to:.*\{", ThreatSeverity.HIGH, 0.85, "Unsafe user input interpolation in prompt"),
@@ -178,7 +245,7 @@ def get_threat_patterns() -> Dict:
                 (r'"(preinstall|postinstall)"\s*:\s*"[^"]*node\s+-e[^"]*child_process', ThreatSeverity.HIGH, 0.85, "NPM script with inline Node.js execution"),
                 (r'"(preinstall|postinstall)"\s*:\s*"[^"]*eval\(', ThreatSeverity.HIGH, 0.85, "NPM script with eval"),
                 (r'"(preinstall|postinstall)"\s*:\s*"[^"]*base64\s+-d', ThreatSeverity.HIGH, 0.8, "NPM script with base64 decode (obfuscation)"),
-                
+
                 # Suspicious dependencies
                 (r'"dependencies"[^}]*"[^"]*typo[^"]*":', ThreatSeverity.MEDIUM, 0.6, "Possible typosquatting package"),
                 (r'"dependencies"[^}]*"(expresss|lodsh|momnet|requst)":', ThreatSeverity.HIGH, 0.8, "Known typosquatting package"),

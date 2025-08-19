@@ -11,12 +11,10 @@ Advanced session tracking and analysis:
 
 import json
 import sqlite3
-import asyncio
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 
 class ThreatLevel(Enum):
@@ -36,27 +34,27 @@ class SessionNode:
     server_name: str
     client_name: str
     event_type: str
-    tool_name: Optional[str]
-    parameters: Optional[Dict]
-    result: Optional[Dict]
+    tool_name: str | None
+    parameters: dict | None
+    result: dict | None
     threat_level: ThreatLevel = ThreatLevel.LOW
-    metadata: Dict = None
-    
+    metadata: dict = None
+
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}
-        
+
         # Convert string to datetime if needed
         if isinstance(self.timestamp, str):
             self.timestamp = datetime.fromisoformat(self.timestamp)
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         data = asdict(self)
         data['timestamp'] = self.timestamp.isoformat()
         data['threat_level'] = self.threat_level.value
         return data
-    
+
     def __lt__(self, other: "SessionNode") -> bool:
         """Sort by timestamp"""
         return self.timestamp < other.timestamp
@@ -66,14 +64,14 @@ class Session:
     """
     Enhanced session tracking with persistence and analysis.
     """
-    
+
     def __init__(self, session_id: str, client: str, server: str):
         self.session_id = session_id
         self.client = client
         self.server = server
-        self.nodes: List[SessionNode] = []
+        self.nodes: list[SessionNode] = []
         self.started_at = datetime.now()
-        self.ended_at: Optional[datetime] = None
+        self.ended_at: datetime | None = None
         self.threat_summary = {
             'max_level': ThreatLevel.SAFE,
             'critical_count': 0,
@@ -81,12 +79,12 @@ class Session:
             'medium_count': 0,
             'low_count': 0
         }
-    
+
     def add_node(self, node: SessionNode):
         """Add event node to session"""
         self.nodes.append(node)
         self.nodes.sort()  # Keep chronological order
-        
+
         # Update threat summary
         if node.threat_level == ThreatLevel.CRITICAL:
             self.threat_summary['critical_count'] += 1
@@ -103,28 +101,28 @@ class Session:
             self.threat_summary['low_count'] += 1
             if self.threat_summary['max_level'] == ThreatLevel.SAFE:
                 self.threat_summary['max_level'] = ThreatLevel.LOW
-    
-    def get_timeline(self) -> List[SessionNode]:
+
+    def get_timeline(self) -> list[SessionNode]:
         """Get chronological timeline of events"""
         return sorted(self.nodes)
-    
-    def get_tool_usage(self) -> Dict[str, int]:
+
+    def get_tool_usage(self) -> dict[str, int]:
         """Get tool usage statistics"""
         usage = {}
         for node in self.nodes:
             if node.tool_name:
                 usage[node.tool_name] = usage.get(node.tool_name, 0) + 1
         return usage
-    
-    def find_toxic_flows(self) -> List[Dict]:
+
+    def find_toxic_flows(self) -> list[dict]:
         """Detect potentially dangerous tool combinations"""
         toxic_flows = []
-        
+
         # Look for dangerous patterns
         for i in range(len(self.nodes) - 1):
             curr = self.nodes[i]
             next_node = self.nodes[i + 1]
-            
+
             # Check for credential read -> network send
             if curr.tool_name in ['read_file', 'read_env', 'get_credentials']:
                 if next_node.tool_name in ['http_post', 'send_data', 'upload']:
@@ -135,7 +133,7 @@ class Session:
                         'timestamp': next_node.timestamp.isoformat(),
                         'risk': 'CRITICAL'
                     })
-            
+
             # Check for download -> execute
             if curr.tool_name in ['download', 'fetch_url', 'http_get']:
                 if next_node.tool_name in ['exec', 'eval', 'run_command']:
@@ -146,10 +144,10 @@ class Session:
                         'timestamp': next_node.timestamp.isoformat(),
                         'risk': 'CRITICAL'
                     })
-        
+
         return toxic_flows
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """Convert session to dictionary"""
         return {
             'session_id': self.session_id,
@@ -177,22 +175,22 @@ class SessionManager:
     - Async operations
     - Better analytics
     """
-    
+
     def __init__(self, db_path: str = None):
         if db_path is None:
             db_path = Path.home() / '.secure-mcp' / 'sessions.db'
-        
+
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        self.active_sessions: Dict[str, Session] = {}
+
+        self.active_sessions: dict[str, Session] = {}
         self._init_database()
-    
+
     def _init_database(self):
         """Initialize SQLite database"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         # Create sessions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
@@ -205,7 +203,7 @@ class SessionManager:
                 event_count INTEGER DEFAULT 0
             )
         ''')
-        
+
         # Create events table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS events (
@@ -221,28 +219,28 @@ class SessionManager:
                 FOREIGN KEY(session_id) REFERENCES sessions(session_id)
             )
         ''')
-        
+
         # Create indexes for performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_events_threat ON events(threat_level)')
-        
+
         conn.commit()
         conn.close()
-    
+
     async def create_session(self, client: str, server: str) -> str:
         """Create new session"""
         session_id = f"{client}-{server}-{datetime.now().isoformat()}"
         session = Session(session_id, client, server)
-        
+
         self.active_sessions[session_id] = session
-        
+
         # Persist to database
         await self._save_session(session)
-        
+
         return session_id
-    
-    async def log_event(self, session_id: str, event: Dict):
+
+    async def log_event(self, session_id: str, event: dict):
         """Log event to session"""
         if session_id not in self.active_sessions:
             # Try to load from database
@@ -250,9 +248,9 @@ class SessionManager:
             if not session:
                 raise ValueError(f"Session not found: {session_id}")
             self.active_sessions[session_id] = session
-        
+
         session = self.active_sessions[session_id]
-        
+
         # Create session node
         node = SessionNode(
             timestamp=datetime.now(),
@@ -266,43 +264,43 @@ class SessionManager:
             threat_level=ThreatLevel(event.get('threat_level', 'low')),
             metadata=event.get('metadata', {})
         )
-        
+
         session.add_node(node)
-        
+
         # Persist event
         await self._save_event(node)
-    
-    async def get_session(self, session_id: str) -> Optional[Dict]:
+
+    async def get_session(self, session_id: str) -> dict | None:
         """Get session details"""
         if session_id in self.active_sessions:
             return self.active_sessions[session_id].to_dict()
-        
+
         # Try to load from database
         session = await self._load_session(session_id)
         if session:
             return session.to_dict()
-        
+
         return None
-    
-    async def get_all_sessions(self) -> List[Dict]:
+
+    async def get_all_sessions(self) -> list[dict]:
         """Get all sessions"""
         sessions = []
-        
+
         # Add active sessions
         for session in self.active_sessions.values():
             sessions.append(session.to_dict())
-        
+
         # Add persisted sessions not in memory
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             SELECT session_id, client, server, started_at, ended_at, max_threat_level, event_count
             FROM sessions
             WHERE session_id NOT IN ({})
-        '''.format(','.join('?' * len(self.active_sessions))), 
+        '''.format(','.join('?' * len(self.active_sessions))),
             list(self.active_sessions.keys()) if self.active_sessions else [''])
-        
+
         for row in cursor.fetchall():
             sessions.append({
                 'session_id': row[0],
@@ -313,10 +311,10 @@ class SessionManager:
                 'max_threat_level': row[5],
                 'event_count': row[6]
             })
-        
+
         conn.close()
         return sessions
-    
+
     async def end_session(self, session_id: str):
         """End a session"""
         if session_id in self.active_sessions:
@@ -324,12 +322,12 @@ class SessionManager:
             session.ended_at = datetime.now()
             await self._save_session(session)
             del self.active_sessions[session_id]
-    
+
     async def _save_session(self, session: Session):
         """Save session to database"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             INSERT OR REPLACE INTO sessions 
             (session_id, client, server, started_at, ended_at, max_threat_level, event_count)
@@ -343,15 +341,15 @@ class SessionManager:
             session.threat_summary['max_level'].value,
             len(session.nodes)
         ))
-        
+
         conn.commit()
         conn.close()
-    
+
     async def _save_event(self, node: SessionNode):
         """Save event to database"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             INSERT INTO events
             (session_id, timestamp, event_type, tool_name, parameters, result, threat_level, metadata)
@@ -366,29 +364,29 @@ class SessionManager:
             node.threat_level.value,
             json.dumps(node.metadata) if node.metadata else None
         ))
-        
+
         conn.commit()
         conn.close()
-    
-    async def _load_session(self, session_id: str) -> Optional[Session]:
+
+    async def _load_session(self, session_id: str) -> Session | None:
         """Load session from database"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         # Load session info
         cursor.execute(
             'SELECT client, server, started_at FROM sessions WHERE session_id = ?',
             (session_id,)
         )
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
             return None
-        
+
         session = Session(session_id, row[0], row[1])
         session.started_at = datetime.fromisoformat(row[2])
-        
+
         # Load events
         cursor.execute('''
             SELECT timestamp, event_type, tool_name, parameters, result, threat_level, metadata
@@ -396,7 +394,7 @@ class SessionManager:
             WHERE session_id = ?
             ORDER BY timestamp
         ''', (session_id,))
-        
+
         for row in cursor.fetchall():
             node = SessionNode(
                 timestamp=datetime.fromisoformat(row[0]),
@@ -411,20 +409,20 @@ class SessionManager:
                 metadata=json.loads(row[6]) if row[6] else {}
             )
             session.add_node(node)
-        
+
         conn.close()
         return session
-    
+
     async def save(self):
         """Save all active sessions"""
         for session in self.active_sessions.values():
             await self._save_session(session)
-    
-    async def query_high_risk_sessions(self) -> List[Dict]:
+
+    async def query_high_risk_sessions(self) -> list[dict]:
         """Query sessions with high risk events"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             SELECT DISTINCT s.session_id, s.client, s.server, s.started_at, 
                    COUNT(e.id) as risk_event_count
@@ -434,7 +432,7 @@ class SessionManager:
             GROUP BY s.session_id
             ORDER BY risk_event_count DESC
         ''')
-        
+
         results = []
         for row in cursor.fetchall():
             results.append({
@@ -444,6 +442,6 @@ class SessionManager:
                 'started_at': row[3],
                 'risk_event_count': row[4]
             })
-        
+
         conn.close()
         return results

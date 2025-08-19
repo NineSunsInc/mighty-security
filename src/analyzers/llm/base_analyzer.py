@@ -4,12 +4,13 @@ Base LLM Analyzer Interface
 Modular design for pluggable LLM providers
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple
-from enum import Enum
 import json
 import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
 
 class AnalysisType(Enum):
     """Types of LLM analysis"""
@@ -27,10 +28,10 @@ class LLMRequest:
     file_path: str
     code_snippet: str
     analysis_type: AnalysisType
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     priority: float = 0.5  # 0-1, higher = more important
     max_tokens: int = 2000
-    
+
     def estimate_tokens(self) -> int:
         """Estimate token count (rough: 1 token ≈ 4 chars)"""
         return len(self.code_snippet) // 4 + 500  # +500 for prompt overhead
@@ -41,45 +42,45 @@ class LLMFinding:
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW
     attack_vector: str
     description: str
-    line_numbers: List[int] = field(default_factory=list)
+    line_numbers: list[int] = field(default_factory=list)
     confidence: float = 0.0
     exploitation_scenario: str = ""
     remediation: str = ""
-    evidence: Dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class LLMResponse:
     """Response from LLM analysis"""
     file_path: str
     analysis_type: AnalysisType
-    findings: List[LLMFinding]
+    findings: list[LLMFinding]
     risk_score: float  # 0-1
     summary: str
     tokens_used: int = 0
     analysis_time: float = 0.0
-    
+
 class BaseLLMAnalyzer(ABC):
     """Base class for LLM security analyzers"""
-    
+
     def __init__(self, max_context_tokens: int = 8192):
         self.max_context_tokens = max_context_tokens
         self.total_tokens_used = 0
-        
+
     @abstractmethod
     def analyze(self, request: LLMRequest) -> LLMResponse:
         """Analyze a single code snippet"""
         pass
-    
+
     @abstractmethod
-    def batch_analyze(self, requests: List[LLMRequest]) -> List[LLMResponse]:
+    def batch_analyze(self, requests: list[LLMRequest]) -> list[LLMResponse]:
         """Batch analysis for efficiency"""
         pass
-    
+
     @abstractmethod
-    def get_model_info(self) -> Dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model information"""
         pass
-    
+
     def can_fit_request(self, request: LLMRequest) -> bool:
         """Check if request fits in context window"""
         return request.estimate_tokens() <= self.max_context_tokens
@@ -87,7 +88,7 @@ class BaseLLMAnalyzer(ABC):
     # -------------------------
     # Shared utilities
     # -------------------------
-    def _parse_json_response(self, response_text: str) -> Optional[Dict]:
+    def _parse_json_response(self, response_text: str) -> dict | None:
         """Parse JSON from an LLM response with robust error handling.
 
         Supports fenced code blocks and attempts to repair common JSON issues
@@ -106,10 +107,49 @@ class BaseLLMAnalyzer(ABC):
                 else:
                     # JSON_END missing (truncated response) - try to extract valid JSON
                     json_str = response_text[start:].strip()
-                    # Attempt to close unclosed structures
-                    open_braces = json_str.count('{') - json_str.count('}')
-                    open_brackets = json_str.count('[') - json_str.count(']')
-                    json_str += ']' * open_brackets + '}' * open_braces
+
+                    # Try to find the end of the main JSON object more intelligently
+                    if json_str.startswith('{'):
+                        # Count braces to find balanced JSON
+                        brace_count = 0
+                        last_valid_pos = 0
+                        in_string = False
+                        escape_next = False
+
+                        for i, char in enumerate(json_str):
+                            if escape_next:
+                                escape_next = False
+                                continue
+
+                            if char == '\\':
+                                escape_next = True
+                                continue
+
+                            if char == '"' and not escape_next:
+                                in_string = not in_string
+                                continue
+
+                            if not in_string:
+                                if char == '{':
+                                    brace_count += 1
+                                elif char == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        last_valid_pos = i + 1
+                                        break
+
+                        if last_valid_pos > 0:
+                            json_str = json_str[:last_valid_pos]
+                        else:
+                            # Fallback: attempt to close unclosed structures
+                            open_braces = json_str.count('{') - json_str.count('}')
+                            open_brackets = json_str.count('[') - json_str.count(']')
+                            json_str += ']' * open_brackets + '}' * open_braces
+                    else:
+                        # Attempt to close unclosed structures
+                        open_braces = json_str.count('{') - json_str.count('}')
+                        open_brackets = json_str.count('[') - json_str.count(']')
+                        json_str += ']' * open_brackets + '}' * open_braces
             # Prefer fenced JSON if present
             elif '```json' in response_text:
                 json_start = response_text.find('```json') + 7
@@ -171,7 +211,7 @@ class BaseLLMAnalyzer(ABC):
         except Exception:
             return None
 
-    def _normalize_llm_response_dict(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _normalize_llm_response_dict(self, data: dict[str, Any]) -> dict[str, Any] | None:
         """Validate and normalize a parsed LLM response into the expected schema.
 
         Ensures keys exist with correct types and coerces values where reasonable.
@@ -179,7 +219,7 @@ class BaseLLMAnalyzer(ABC):
         if not isinstance(data, dict):
             return None
 
-        normalized: Dict[str, Any] = {}
+        normalized: dict[str, Any] = {}
 
         # Summary
         normalized['summary'] = str(data.get('summary', ''))
@@ -196,7 +236,7 @@ class BaseLLMAnalyzer(ABC):
             findings_in = []
 
         allowed_severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
-        normalized_findings: List[Dict[str, Any]] = []
+        normalized_findings: list[dict[str, Any]] = []
         for raw in findings_in:
             if not isinstance(raw, dict):
                 continue
@@ -224,7 +264,7 @@ class BaseLLMAnalyzer(ABC):
         normalized['findings'] = normalized_findings
         return normalized
 
-    def _extract_largest_json_object(self, text: str) -> Optional[str]:
+    def _extract_largest_json_object(self, text: str) -> str | None:
         """Extract the largest balanced {...} block as a fallback."""
         start = -1
         depth = 0
@@ -270,7 +310,7 @@ class BaseLLMAnalyzer(ABC):
         ]
 
         lines = text.splitlines()
-        cleaned_lines: List[str] = []
+        cleaned_lines: list[str] = []
         for line in lines:
             if any(re.search(p, line, flags=re.IGNORECASE) for p in forbidden_install_patterns):
                 continue
@@ -288,7 +328,7 @@ class BaseLLMAnalyzer(ABC):
 
         return cleaned
 
-    def _enforce_policy_on_findings(self, findings: List[LLMFinding]) -> List[LLMFinding]:
+    def _enforce_policy_on_findings(self, findings: list[LLMFinding]) -> list[LLMFinding]:
         """Apply remediation policy to all findings in-place and return them."""
         for finding in findings:
             finding.description = self._sanitize_text_policy(finding.description)

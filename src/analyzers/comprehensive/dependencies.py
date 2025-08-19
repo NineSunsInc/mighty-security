@@ -1,17 +1,17 @@
-import re
-from pathlib import Path
-from typing import Dict, List, Tuple, Any
 import json
-import urllib.request
+import re
 import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
 
 
 class DependencyVulnerabilityChecker:
     """Check for vulnerable dependencies (simple heuristic)."""
 
-    def check(self, repo_path: Path) -> Tuple[Dict, List]:
-        dependencies: Dict[str, Dict] = {}
-        vulnerabilities: List[Dict] = []
+    def check(self, repo_path: Path) -> tuple[dict, list]:
+        dependencies: dict[str, dict] = {}
+        vulnerabilities: list[dict] = []
 
         # Collect pinned dependencies from common manifests
         py_reqs = self._parse_requirements(repo_path / "requirements.txt")
@@ -24,7 +24,7 @@ class DependencyVulnerabilityChecker:
             dependencies[f"npm:{name}"] = {"ecosystem": "npm", "name": name, "version": version, "source": "package-lock.json"}
 
         # Build OSV batch queries
-        queries: List[Dict[str, Any]] = []
+        queries: list[dict[str, Any]] = []
         for name, version in py_reqs:
             if version:
                 queries.append({
@@ -51,30 +51,30 @@ class DependencyVulnerabilityChecker:
     # ------------------------
     # Parsers
     # ------------------------
-    def _parse_requirements(self, path: Path) -> List[Tuple[str, str]]:
-        deps: List[Tuple[str, str]] = []
+    def _parse_requirements(self, path: Path) -> list[tuple[str, str]]:
+        deps: list[tuple[str, str]] = []
         if not path.exists():
             return deps
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(path, encoding="utf-8", errors="ignore") as f:
             for raw in f:
                 line = raw.strip()
                 if not line or line.startswith("#"):
                     continue
-                # Accept forms: pkg==1.2.3, pkg===1.2.3, pkg>=1.2.3 (take pinned only), pkg==1.2.3 ; markers
+                # Accept forms: pkg==1.2.3, pkg===1.2.3, pkg>=1.2.3, pkg<2.0, pkg<=, pkg>
                 name_ver = re.split(r";|\s", line)[0]
-                if "==" in name_ver:
-                    name, version = name_ver.split("==", 1)
-                    deps.append((name.strip(), version.strip()))
-                elif "===" in name_ver:
-                    name, version = name_ver.split("===", 1)
-                    deps.append((name.strip(), version.strip()))
+                m = re.match(r"^([A-Za-z0-9_.\-]+)\s*([<>=!~]=?|===)\s*([^#]+)$", name_ver)
+                if m:
+                    name, op, ver = m.group(1), m.group(2), m.group(3).strip()
+                    ver = ver.split('#')[0].strip()
+                    deps.append((name.strip(), ver if op in {"==", "==="} else f"{op}{ver}"))
                 else:
-                    # Skip unpinned to avoid false matches
-                    pass
+                    m2 = re.match(r"^([A-Za-z0-9_.\-]+)$", name_ver)
+                    if m2:
+                        deps.append((m2.group(1), ""))
         return deps
 
-    def _parse_package_lock(self, path: Path) -> List[Tuple[str, str]]:
-        deps: List[Tuple[str, str]] = []
+    def _parse_package_lock(self, path: Path) -> list[tuple[str, str]]:
+        deps: list[tuple[str, str]] = []
         if not path.exists():
             return deps
         try:
@@ -89,7 +89,7 @@ class DependencyVulnerabilityChecker:
                 if name and version:
                     deps.append((name, version))
         elif "dependencies" in data:
-            def walk(dep_map: Dict[str, Any]):
+            def walk(dep_map: dict[str, Any]):
                 for name, meta in dep_map.items():
                     version = meta.get("version")
                     if name and version:
@@ -99,10 +99,27 @@ class DependencyVulnerabilityChecker:
             walk(data["dependencies"])
         return deps
 
+    def parse_package_json(self, path: Path) -> list[tuple[str, str, bool]]:
+        """Parse package.json dependencies and devDependencies.
+        Returns list of (name, version, is_dev).
+        """
+        out: list[tuple[str, str, bool]] = []
+        if not path.exists():
+            return out
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return out
+        for name, ver in (data.get("dependencies") or {}).items():
+            out.append((name, ver, False))
+        for name, ver in (data.get("devDependencies") or {}).items():
+            out.append((name, ver, True))
+        return out
+
     # ------------------------
     # OSV client
     # ------------------------
-    def _osv_query_batch(self, queries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _osv_query_batch(self, queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Query OSV batch API. Returns list of {package, vulns} results.
         Uses only stdlib to avoid extra dependencies.
         """
@@ -123,7 +140,7 @@ class DependencyVulnerabilityChecker:
         except Exception:
             return []
 
-    def _normalize_osv_vuln(self, pkg: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_osv_vuln(self, pkg: dict[str, Any], v: dict[str, Any]) -> dict[str, Any]:
         """Normalize OSV vulnerability to our internal structure."""
         ecosystem = pkg.get("ecosystem")
         name = pkg.get("name")

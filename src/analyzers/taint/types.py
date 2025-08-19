@@ -7,7 +7,6 @@ Defines the core data structures used by the taint engine and security rules.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
 
 
 class TaintKind(Enum):
@@ -22,8 +21,8 @@ class TaintKind(Enum):
 class Frame:
     file_path: str
     line: int
-    function: Optional[str] = None
-    code_preview: Optional[str] = None
+    function: str | None = None
+    code_preview: str | None = None
 
 
 @dataclass
@@ -34,8 +33,8 @@ class FlowTrace:
     sink_type: str
     source_location: str
     sink_location: str
-    path: List[Frame] = field(default_factory=list)
+    path: list[Frame] = field(default_factory=list)
     sanitized: bool = False
-    sanitizers: List[str] = field(default_factory=list)
+    sanitizers: list[str] = field(default_factory=list)
     confidence: float = 0.0
 

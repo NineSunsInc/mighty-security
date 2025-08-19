@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ThreatSeverity(Enum):
@@ -18,6 +18,7 @@ class AttackVector(Enum):
     COMMAND_INJECTION = "command_injection"
     PROMPT_INJECTION = "prompt_injection"
     CREDENTIAL_THEFT = "credential_theft"
+    PATH_TRAVERSAL = "path_traversal"
     PACKAGE_HIJACK = "package_hijack"
     SUPPLY_CHAIN = "supply_chain_attack"
     PERSISTENCE = "persistence_mechanism"
@@ -28,6 +29,8 @@ class AttackVector(Enum):
     TIME_BOMB = "time_bomb"
     RESOURCE_EXHAUSTION = "resource_exhaustion"
     MODEL_POISONING = "model_poisoning"
+    SSRF = "ssrf"
+    UNSAFE_DESERIALIZATION = "unsafe_deserialization"
 
 
 @dataclass
@@ -36,14 +39,14 @@ class ThreatIndicator:
     severity: ThreatSeverity
     confidence: float
     file_path: str
-    line_numbers: List[int] = field(default_factory=list)
-    code_snippet: Optional[str] = None
+    line_numbers: list[int] = field(default_factory=list)
+    code_snippet: str | None = None
     description: str = ""
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    mitre_attack_id: Optional[str] = None
-    cve_ids: List[str] = field(default_factory=list)
-    cwe_ids: List[str] = field(default_factory=list)
-    remediation: Optional[str] = None
+    evidence: dict[str, Any] = field(default_factory=dict)
+    mitre_attack_id: str | None = None
+    cve_ids: list[str] = field(default_factory=list)
+    cwe_ids: list[str] = field(default_factory=list)
+    remediation: str | None = None
 
 
 @dataclass
@@ -52,7 +55,7 @@ class DataFlow:
     source_location: str
     sink_type: str
     sink_location: str
-    path: List[str]
+    path: list[str]
     is_tainted: bool
     risk_score: float
 
@@ -61,7 +64,7 @@ class DataFlow:
 class BehaviorPattern:
     pattern_type: str
     occurrences: int
-    files_involved: List[str]
+    files_involved: list[str]
     risk_score: float
     description: str
 
@@ -75,22 +78,22 @@ class SecurityReport:
     confidence: float
     sha512_fingerprint: str
     sha3_512_fingerprint: str
-    file_fingerprints: Dict[str, Dict[str, str]]
+    file_fingerprints: dict[str, dict[str, str]]
     merkle_root: str
-    threats_found: List[ThreatIndicator]
-    data_flows: List[DataFlow]
-    behavior_patterns: List[BehaviorPattern]
+    threats_found: list[ThreatIndicator]
+    data_flows: list[DataFlow]
+    behavior_patterns: list[BehaviorPattern]
     total_files_scanned: int
     total_lines_analyzed: int
-    languages_detected: Dict[str, int]
-    dependencies: Dict[str, Dict[str, Any]]
-    vulnerable_dependencies: List[Dict[str, Any]]
-    recommendations: List[str]
-    mitigations: List[str]
+    languages_detected: dict[str, int]
+    dependencies: dict[str, dict[str, Any]]
+    vulnerable_dependencies: list[dict[str, Any]]
+    recommendations: list[str]
+    mitigations: list[str]
     ml_maliciousness_score: float = 0.0
-    ml_explanations: List[str] = field(default_factory=list)
-    llm_analysis: Dict[str, Any] = field(default_factory=dict)
-    advanced_ml_analysis: Dict[str, Any] = field(default_factory=dict)
-    combined_ai_assessment: Dict[str, Any] = field(default_factory=dict)
+    ml_explanations: list[str] = field(default_factory=list)
+    llm_analysis: dict[str, Any] = field(default_factory=dict)
+    advanced_ml_analysis: dict[str, Any] = field(default_factory=dict)
+    combined_ai_assessment: dict[str, Any] = field(default_factory=dict)
 
 

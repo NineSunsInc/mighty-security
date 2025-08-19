@@ -1,15 +1,14 @@
 from pathlib import Path
-from typing import List, Tuple
 
-from .models import ThreatIndicator, DataFlow, ThreatSeverity
+from .models import DataFlow, ThreatIndicator, ThreatSeverity
 
 
 class LocalMLModel:
     """Local machine learning model for maliciousness detection (heuristic)."""
 
     def analyze(
-        self, repo_path: Path, threats: List[ThreatIndicator], data_flows: List[DataFlow]
-    ) -> Tuple[float, List[str]]:
+        self, repo_path: Path, threats: list[ThreatIndicator], data_flows: list[DataFlow]
+    ) -> tuple[float, list[str]]:
         features = {
             "threat_count": len(threats),
             "critical_threats": sum(1 for t in threats if t.severity == ThreatSeverity.CRITICAL),
@@ -19,7 +18,7 @@ class LocalMLModel:
         }
 
         score = 0.0
-        explanations: List[str] = []
+        explanations: list[str] = []
 
         if features["critical_threats"] > 0:
             score += 0.5

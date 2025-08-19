@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import List
 
 from .models import BehaviorPattern, ThreatIndicator
 
@@ -7,8 +6,8 @@ from .models import BehaviorPattern, ThreatIndicator
 class BehaviorAnalyzer:
     """Analyze behavioral patterns in code based on detected threats."""
 
-    def analyze(self, repo_path, threats: List[ThreatIndicator]) -> List[BehaviorPattern]:
-        patterns: List[BehaviorPattern] = []
+    def analyze(self, repo_path, threats: list[ThreatIndicator]) -> list[BehaviorPattern]:
+        patterns: list[BehaviorPattern] = []
         threat_groups = defaultdict(list)
         for threat in threats:
             threat_groups[threat.attack_vector].append(threat)

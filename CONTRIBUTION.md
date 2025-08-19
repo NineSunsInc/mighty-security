@@ -8,7 +8,7 @@ By contributing, you help make the MCP ecosystem safer. Please read this documen
 
 ## Quick Start (Development)
 
-- **Requirements**: Python 3.11+, Git, macOS/Linux/WSL
+- **Requirements**: Python 3.13+, Git, macOS/Linux/WSL
 - **Clone**:
   ```bash
   git clone https://github.com/<your-org>/secure-toolings.git

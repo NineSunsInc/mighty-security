@@ -1,19 +1,19 @@
 """Composable components for the Comprehensive MCP Analyzer."""
 
-from .models import (
-    ThreatSeverity,
-    AttackVector,
-    ThreatIndicator,
-    DataFlow,
-    BehaviorPattern,
-    SecurityReport,
-)
-from .progress import ProgressTracker
-from .ml import LocalMLModel
-from .dependencies import DependencyVulnerabilityChecker
 from .behavior import BehaviorAnalyzer
 from .data_flow import DataFlowAnalyzer
+from .dependencies import DependencyVulnerabilityChecker
+from .ml import LocalMLModel
+from .models import (
+    AttackVector,
+    BehaviorPattern,
+    DataFlow,
+    SecurityReport,
+    ThreatIndicator,
+    ThreatSeverity,
+)
 from .patterns import get_threat_patterns
+from .progress import ProgressTracker
 
 __all__ = [
     "ThreatSeverity",
