@@ -206,80 +206,80 @@ const ThreatsProtection = () => {
         {
           name: 'AST-Based Detection',
           description: 'Deep code structure analysis using Abstract Syntax Trees',
-          coverage: '95%'
+          coverage: 'Active'
         },
         {
           name: 'Pattern Matching',
-          description: '50+ threat patterns for known attack vectors',
-          coverage: '92%'
+          description: '21+ threat patterns across 15 attack categories',
+          coverage: 'Active'
         },
         {
-          name: 'Dependency Analysis',
-          description: 'Scan external libraries and imports for threats',
-          coverage: '88%'
+          name: 'Context-Aware Filtering',
+          description: 'Reduces false positives by understanding code context',
+          coverage: 'Active'
         }
       ]
     },
     {
-      category: 'Dynamic Analysis',
+      category: 'Data Flow Analysis',
       icon: Network,
       features: [
         {
           name: 'Taint Analysis',
-          description: 'Track untrusted data flow through application',
-          coverage: '87%'
+          description: 'Track untrusted data flow from sources to sinks',
+          coverage: 'Active'
         },
         {
-          name: 'Behavioral Monitoring',
-          description: 'Runtime behavior analysis for anomalies',
-          coverage: '83%'
+          name: 'Call Graph Analysis',
+          description: 'Map function relationships and data paths',
+          coverage: 'Active'
         },
         {
-          name: 'Network Monitoring',
-          description: 'Track outbound connections and data transfers',
-          coverage: '90%'
+          name: 'Behavioral Patterns',
+          description: 'Detect suspicious code behavior patterns',
+          coverage: 'Active'
         }
       ]
     },
     {
-      category: 'AI-Enhanced',
+      category: 'AI-Enhanced (Optional)',
       icon: Eye,
       features: [
         {
-          name: 'ML Threat Detection',
-          description: 'Machine learning models for sophisticated attacks',
-          coverage: '78%'
+          name: 'Cerebras LLM Analysis',
+          description: 'GPT-OSS-120B model for deep semantic analysis',
+          coverage: 'When API key configured'
         },
         {
-          name: 'LLM Analysis',
-          description: 'Large language model for context-aware detection',
-          coverage: '75%'
+          name: 'ML-Based Scoring',
+          description: 'Machine learning ensemble for threat scoring',
+          coverage: 'Optional feature'
         },
         {
-          name: 'Semantic Analysis',
-          description: 'Understand code intent beyond syntax',
-          coverage: '82%'
+          name: 'Semantic Understanding',
+          description: 'Context-aware code intent analysis',
+          coverage: 'Enhanced with LLM'
         }
       ]
     },
     {
-      category: 'Policy & Compliance',
+      category: 'Security & Integrity',
       icon: Lock,
       features: [
         {
-          name: 'Custom Policies',
-          description: 'Define organization-specific security rules',
-          coverage: '100%'
+          name: 'SHA-512 Fingerprinting',
+          description: 'Cryptographic hash to verify code hasn\'t been tampered with',
+          coverage: 'Every scan'
         },
         {
-          name: 'Compliance Checks',
-          description: 'Built-in compliance frameworks (SOC2, ISO27001)',
-          coverage: '95%'
+          name: 'Merkle Root Generation',
+          description: 'Tree-based verification for efficient file integrity checking',
+          coverage: 'Every scan'
         },
         {
-          name: 'Risk Scoring',
-          description: 'Quantitative risk assessment (0-100 scale)',
-          coverage: '100%'
+          name: 'Risk Scoring (0-100)',
+          description: 'Quantitative assessment combining all threat signals',
+          coverage: 'Every scan'
         }
       ]
     }
@@ -287,27 +287,27 @@ const ThreatsProtection = () => {
 
   const caseStudies = [
     {
-      title: 'Enterprise Deployment Success',
-      organization: 'Fortune 500 Financial Services',
-      challenge: 'Needed to scan 200+ MCP tools across development teams',
-      solution: 'Deployed comprehensive scanner with custom policies',
+      title: 'Development Team Security',
+      organization: 'Tech Startup',
+      challenge: 'Needed to validate MCP tools before production use',
+      solution: 'Integrated Mighty MCP Scanner into review process',
       results: [
-        'Detected 23 critical vulnerabilities in production tools',
-        'Prevented potential $2M+ security incident',
-        'Achieved 100% tool scanning coverage',
-        'Reduced security review time by 75%'
+        'Identified suspicious patterns in 3 third-party tools',
+        'Established security baseline for all MCP integrations',
+        'Automated scanning in CI/CD pipeline',
+        'Increased developer confidence in tool selection'
       ]
     },
     {
-      title: 'Open Source Project Protection',
-      organization: 'Popular MCP Framework',
-      challenge: 'Community-contributed tools needed security validation',
-      solution: 'Integrated scanner into CI/CD pipeline',
+      title: 'Open Source Contribution',
+      organization: 'MCP Community Project',
+      challenge: 'Verify security of community-contributed tools',
+      solution: 'Run scanner on all pull requests',
       results: [
-        'Automated security checks for all contributions',
-        'Blocked 12 malicious tool submissions',
-        'Improved community trust and adoption',
-        'Zero security incidents post-deployment'
+        'Caught unintentional credential exposure',
+        'Educated contributors on secure coding practices',
+        'Built trust with security-conscious users',
+        'Created security guidelines based on scan results'
       ]
     }
   ];
@@ -447,6 +447,55 @@ const ThreatsProtection = () => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="section">
+        <h2 className="section-title">
+          <Lock className="section-icon" />
+          Understanding Security Fingerprints
+        </h2>
+        <p className="section-description">
+          Every scan generates cryptographic fingerprints to ensure code integrity and detect tampering.
+        </p>
+        
+        <div className="fingerprint-explanation">
+          <div className="fingerprint-card">
+            <h3 className="fingerprint-title">SHA-512 Hash</h3>
+            <p className="fingerprint-description">
+              A unique 128-character identifier for your codebase. Like a digital fingerprint, 
+              even a single character change produces a completely different hash. This helps:
+            </p>
+            <ul className="fingerprint-benefits">
+              <li>✓ Detect unauthorized modifications</li>
+              <li>✓ Verify code hasn't been tampered with</li>
+              <li>✓ Track changes between scans</li>
+              <li>✓ Ensure scan reproducibility</li>
+            </ul>
+          </div>
+          
+          <div className="fingerprint-card">
+            <h3 className="fingerprint-title">Merkle Root</h3>
+            <p className="fingerprint-description">
+              A tree-based hash that efficiently verifies the integrity of all files. 
+              Each file gets hashed, then pairs of hashes are combined until reaching a single root. This enables:
+            </p>
+            <ul className="fingerprint-benefits">
+              <li>✓ Fast verification of large codebases</li>
+              <li>✓ Pinpoint which files changed</li>
+              <li>✓ Efficient comparison between versions</li>
+              <li>✓ Tamper-proof audit trail</li>
+            </ul>
+          </div>
+          
+          <div className="fingerprint-card">
+            <h3 className="fingerprint-title">Why This Matters</h3>
+            <p className="fingerprint-description">
+              These fingerprints act as a security seal. If an attacker modifies your MCP tool after scanning, 
+              the fingerprints will change, alerting you to potential tampering. Think of it as a tamper-evident 
+              seal on medicine bottles - you'll know if someone has messed with your code.
+            </p>
+          </div>
         </div>
       </div>
 

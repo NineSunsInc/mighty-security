@@ -611,6 +611,18 @@ class ComprehensiveMCPAnalyzer:
                     languages[lang] = languages.get(lang, 0) + count
                 total_lines += parallel_results['total_lines']
 
+                # Fallback: if no fingerprints returned, reconcile with input set for parity with sequential
+                if not file_fingerprints and scannable_files:
+                    for f in scannable_files:
+                        rel = str(f.relative_to(repo_path))
+                        try:
+                            size = f.stat().st_size
+                        except Exception:
+                            size = 0
+                        file_fingerprints[rel] = {
+                            'sha512': '', 'sha3_512': '', 'size': size, 'entropy': 0
+                        }
+
                 # Log performance stats
                 stats = self.optimized_processor.get_performance_stats()
                 self.progress.log(f"OPTIMIZED processing: {stats['files_per_second']:.1f} files/sec", "success")
@@ -627,6 +639,18 @@ class ComprehensiveMCPAnalyzer:
                 for lang, count in parallel_results['languages'].items():
                     languages[lang] = languages.get(lang, 0) + count
                 total_lines += parallel_results['total_lines']
+
+                # Fallback: if no fingerprints returned, reconcile with input set for parity with sequential
+                if not file_fingerprints and scannable_files:
+                    for f in scannable_files:
+                        rel = str(f.relative_to(repo_path))
+                        try:
+                            size = f.stat().st_size
+                        except Exception:
+                            size = 0
+                        file_fingerprints[rel] = {
+                            'sha512': '', 'sha3_512': '', 'size': size, 'entropy': 0
+                        }
 
                 # Get stats
                 stats = parallel_processor.get_stats()
@@ -1670,6 +1694,25 @@ class ComprehensiveMCPAnalyzer:
                         'severity': v.get('severity'),
                     })
                 result['vulnerabilities'] = norm_vulns
+                # Also parse package.json directly to capture deps/devDeps
+                try:
+                    from src.analyzers.comprehensive.dependencies import DependencyVulnerabilityChecker as _D
+                    pkg_entries = _D().parse_package_json(repo_path / 'package.json')
+                    for name, ver, is_dev in pkg_entries:
+                        if name not in result['dependencies']:
+                            result['dependencies'][name] = {
+                                'ecosystem': 'npm',
+                                'version': ver,
+                                'source': 'package.json',
+                                'risk': 'LOW',
+                                'dev': is_dev
+                            }
+                        else:
+                            if is_dev:
+                                result['dependencies'][name]['dev'] = True
+                except Exception:
+                    pass
+
             except Exception as e:
                 self.progress.log(f"Dependency check failed: {e}", "debug")
                 result['dependencies'] = {}

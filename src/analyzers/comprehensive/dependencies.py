@@ -60,17 +60,17 @@ class DependencyVulnerabilityChecker:
                 line = raw.strip()
                 if not line or line.startswith("#"):
                     continue
-                # Accept forms: pkg==1.2.3, pkg===1.2.3, pkg>=1.2.3 (take pinned only), pkg==1.2.3 ; markers
+                # Accept forms: pkg==1.2.3, pkg===1.2.3, pkg>=1.2.3, pkg<2.0, pkg<=, pkg>
                 name_ver = re.split(r";|\s", line)[0]
-                if "==" in name_ver:
-                    name, version = name_ver.split("==", 1)
-                    deps.append((name.strip(), version.strip()))
-                elif "===" in name_ver:
-                    name, version = name_ver.split("===", 1)
-                    deps.append((name.strip(), version.strip()))
+                m = re.match(r"^([A-Za-z0-9_.\-]+)\s*([<>=!~]=?|===)\s*([^#]+)$", name_ver)
+                if m:
+                    name, op, ver = m.group(1), m.group(2), m.group(3).strip()
+                    ver = ver.split('#')[0].strip()
+                    deps.append((name.strip(), ver if op in {"==", "==="} else f"{op}{ver}"))
                 else:
-                    # Skip unpinned to avoid false matches
-                    pass
+                    m2 = re.match(r"^([A-Za-z0-9_.\-]+)$", name_ver)
+                    if m2:
+                        deps.append((m2.group(1), ""))
         return deps
 
     def _parse_package_lock(self, path: Path) -> list[tuple[str, str]]:
@@ -98,6 +98,23 @@ class DependencyVulnerabilityChecker:
                         walk(meta["dependencies"])
             walk(data["dependencies"])
         return deps
+
+    def parse_package_json(self, path: Path) -> list[tuple[str, str, bool]]:
+        """Parse package.json dependencies and devDependencies.
+        Returns list of (name, version, is_dev).
+        """
+        out: list[tuple[str, str, bool]] = []
+        if not path.exists():
+            return out
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return out
+        for name, ver in (data.get("dependencies") or {}).items():
+            out.append((name, ver, False))
+        for name, ver in (data.get("devDependencies") or {}).items():
+            out.append((name, ver, True))
+        return out
 
     # ------------------------
     # OSV client

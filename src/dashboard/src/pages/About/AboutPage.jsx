@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Settings, Shield, AlertTriangle, BookOpen, Zap } from 'lucide-react';
+import { Settings, Shield, Heart, BookOpen, Zap, Github, ExternalLink } from 'lucide-react';
 import HowItWorks from './HowItWorks/HowItWorks';
 import ThreatsProtection from './ThreatsProtection/ThreatsProtection';
 import './AboutPage.css';
@@ -53,13 +53,24 @@ const AboutPage = () => {
               <div className="stat-label">Scan Speed</div>
             </div>
           </div>
-          <div className="stat-card">
-            <AlertTriangle className="stat-icon" size={24} />
+          <a 
+            href="https://github.com/NineSunsInc/mighty-security" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="stat-card hover:scale-105 transition-transform cursor-pointer group"
+            title="⭐ Star us on GitHub!"
+          >
+            <div className="relative">
+              <Heart className="stat-icon group-hover:text-red-500 transition-colors" size={24} />
+              <ExternalLink className="absolute -top-1 -right-1 w-3 h-3 text-gray-400 group-hover:text-gray-600" />
+            </div>
             <div>
-              <div className="stat-number">OSS</div>
+              <div className="stat-number flex items-center gap-1">
+                OSS <Github className="w-4 h-4 opacity-60" />
+              </div>
               <div className="stat-label">Open Source</div>
             </div>
-          </div>
+          </a>
         </div>
       </div>
 

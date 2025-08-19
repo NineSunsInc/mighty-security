@@ -21,21 +21,62 @@ const HistoryPage = () => {
       
       // Transform recent scans into history format
       const historyItems = [];
+      const seenRepos = new Map(); // Track repositories to avoid duplicates
       
       if (data.recent_scans && data.recent_scans.length > 0) {
         data.recent_scans.forEach((scan, index) => {
-          // Clean up the target display
-          let targetDisplay = scan.repo_name || scan.repo_url || 'Local Scan';
+          // Determine the actual repository
+          let targetDisplay = '';
+          let repoKey = null;
           
-          // If it's a temp path, extract just the repo name if available
-          if (targetDisplay.includes('/tmp/') || targetDisplay.includes('/var/folders/')) {
-            // Try to extract the GitHub repo from the scan
-            if (scan.repo_name && scan.repo_name !== targetDisplay) {
-              targetDisplay = scan.repo_name;
+          // Check if it's a GitHub URL
+          if (scan.repo_url && scan.repo_url.includes('github.com')) {
+            const match = scan.repo_url.match(/github\.com\/([^\/]+\/[^\/]+)/);
+            if (match) {
+              targetDisplay = match[1];
+              repoKey = match[1];
+            }
+          } else if (scan.repo_name && scan.repo_name.includes('github.com')) {
+            const match = scan.repo_name.match(/github\.com\/([^\/]+\/[^\/]+)/);
+            if (match) {
+              targetDisplay = match[1];
+              repoKey = match[1];
+            }
+          } else if (scan.repo_url && (scan.repo_url.includes('/tmp/') || scan.repo_url.includes('/var/folders/'))) {
+            // This is a temp directory - likely a cloned GitHub repo
+            // Skip it if we already have the GitHub version
+            const parts = scan.repo_url.split('/');
+            const folderName = parts[parts.length - 1] || 'repo';
+            repoKey = `temp_${folderName}`;
+            targetDisplay = `Local: ${folderName}`;
+          } else if (scan.repo_name) {
+            targetDisplay = scan.repo_name;
+            repoKey = `local_${scan.repo_name}`;
+          } else {
+            targetDisplay = 'Local Scan';
+            repoKey = `unknown_${scan.run_id}`;
+          }
+          
+          // Skip duplicate entries for the same repository
+          if (repoKey && seenRepos.has(repoKey)) {
+            const existing = seenRepos.get(repoKey);
+            // Keep GitHub version over temp directory version
+            if (!existing.isGitHub && targetDisplay.includes('/')) {
+              // Replace with GitHub version
+              const idx = historyItems.findIndex(h => h.id === existing.id);
+              if (idx !== -1) {
+                historyItems.splice(idx, 1);
+              }
             } else {
-              targetDisplay = 'Local Repository Scan';
+              // Skip this duplicate
+              return;
             }
           }
+          
+          seenRepos.set(repoKey, { 
+            id: `scan-${scan.run_id || index}`,
+            isGitHub: scan.repo_url && scan.repo_url.includes('github.com')
+          });
           
           // Add scan completed event
           historyItems.push({
@@ -49,7 +90,8 @@ const HistoryPage = () => {
             details: `Found ${scan.total_threats || 0} threats, risk score: ${scan.threat_score || 0}`,
             threatScore: scan.threat_score || 0,
             threatLevel: scan.threat_level || 'MINIMAL',
-            totalThreats: scan.total_threats || 0
+            totalThreats: scan.total_threats || 0,
+            runId: scan.run_id
           });
         });
       }

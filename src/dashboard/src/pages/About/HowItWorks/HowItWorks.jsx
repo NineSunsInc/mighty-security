@@ -10,7 +10,11 @@ import {
   Code,
   Network,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  TrendingUp,
+  Heart,
+  Github,
+  ExternalLink
 } from 'lucide-react';
 import './HowItWorks.css';
 
@@ -33,7 +37,7 @@ const HowItWorks = () => {
       description: 'Parse code structure using AST and pattern matching',
       details: [
         'Abstract Syntax Tree parsing',
-        '50+ threat pattern detection',
+        '21+ threat pattern detection',
         'Code flow analysis',
         'Import and dependency tracking'
       ]
@@ -261,35 +265,60 @@ const HowItWorks = () => {
 
       <div className="section">
         <div className="performance-metrics">
-          <h2 className="section-title">
-            <AlertTriangle className="section-icon" />
+          <h2 className="section-title" style={{ color: 'white' }}>
+            <TrendingUp style={{ color: 'white' }} size={28} />
             Performance Metrics
           </h2>
           
           <div className="metrics-grid">
             <div className="metric-card">
+              <div style={{ marginBottom: '12px' }}>
+                <Zap size={24} style={{ color: '#FEDC25' }} />
+              </div>
               <div className="metric-value">100-200</div>
               <div className="metric-label">Files/Second</div>
               <div className="metric-description">Typical Scan Speed</div>
             </div>
             
             <div className="metric-card">
-              <div className="metric-value">59</div>
+              <div style={{ marginBottom: '12px' }}>
+                <Shield size={24} style={{ color: '#178EB9' }} />
+              </div>
+              <div className="metric-value">21+</div>
               <div className="metric-label">Threat Patterns</div>
               <div className="metric-description">Active Detection Rules</div>
             </div>
             
             <div className="metric-card">
+              <div style={{ marginBottom: '12px' }}>
+                <Eye size={24} style={{ color: '#127294' }} />
+              </div>
               <div className="metric-value">Context</div>
               <div className="metric-label">Aware Filtering</div>
               <div className="metric-description">Reduces False Positives</div>
             </div>
             
-            <div className="metric-card">
-              <div className="metric-value">OSS</div>
+            <a 
+              href="https://github.com/NineSunsInc/mighty-security"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="metric-card"
+              style={{ 
+                textDecoration: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ marginBottom: '12px' }}>
+                <Heart size={24} style={{ color: '#ef4444' }} />
+              </div>
+              <div className="metric-value" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                OSS <Github size={16} />
+              </div>
               <div className="metric-label">Open Source</div>
-              <div className="metric-description">Community Driven</div>
-            </div>
+              <div className="metric-description" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                Star on GitHub <ExternalLink size={12} />
+              </div>
+            </a>
           </div>
         </div>
       </div>

@@ -2,106 +2,106 @@
   {
     "config": "20 files, low complexity",
     "sequential": {
-      "avg_time": 0.022627722316732008,
-      "min_time": 0.020692875026725233,
-      "max_time": 0.026275584008544683,
-      "std_dev": 0.0031610874156716554,
+      "avg_time": 0.014078320004045963,
+      "min_time": 0.01222604198846966,
+      "max_time": 0.017543083988130093,
+      "std_dev": 0.0030029680576912935,
       "avg_threats": 0,
       "avg_files": 20,
-      "files_per_second": 883.8715501299507
+      "files_per_second": 1420.6240513251728
     },
     "parallel_2": {
-      "avg_time": 0.009201042004860938,
-      "min_time": 0.007616999908350408,
-      "max_time": 0.012303292052820325,
-      "std_dev": 0.0026868289959936075,
+      "avg_time": 0.006509416659052174,
+      "min_time": 0.005171958007849753,
+      "max_time": 0.008968624984845519,
+      "std_dev": 0.0021324661270196482,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 2
     },
     "parallel_4": {
-      "avg_time": 0.008644027984701097,
-      "min_time": 0.008220709045417607,
-      "max_time": 0.009427582961507142,
-      "std_dev": 0.0006793111690394806,
+      "avg_time": 0.00552151402613769,
+      "min_time": 0.005277874995954335,
+      "max_time": 0.005768875009380281,
+      "std_dev": 0.0002455211660875722,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 4
     },
-    "speedup_2": 2.459256495598837,
-    "speedup_4": 2.6177289519169062,
+    "speedup_2": 2.162762155418069,
+    "speedup_4": 2.5497209528767195,
     "consistency": true
   },
   {
     "config": "50 files, medium complexity",
     "sequential": {
-      "avg_time": 0.0709862776954348,
-      "min_time": 0.06880791706498712,
-      "max_time": 0.0725975000532344,
-      "std_dev": 0.0019574138988548008,
+      "avg_time": 0.04752337501849979,
+      "min_time": 0.04422837495803833,
+      "max_time": 0.054004125064238906,
+      "std_dev": 0.005612759994979526,
       "avg_threats": 64,
       "avg_files": 50,
-      "files_per_second": 704.3614853919232
+      "files_per_second": 1052.113827785508
     },
     "parallel_2": {
-      "avg_time": 0.04339290266701331,
-      "min_time": 0.03842808399349451,
-      "max_time": 0.04677129106130451,
-      "std_dev": 0.004392020812476449,
+      "avg_time": 0.021655680689339835,
+      "min_time": 0.021347500034607947,
+      "max_time": 0.021932458970695734,
+      "std_dev": 0.0002937410781921263,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 2
     },
     "parallel_4": {
-      "avg_time": 0.04882861099516352,
-      "min_time": 0.042673374991863966,
-      "max_time": 0.05878037493675947,
-      "std_dev": 0.008698797623575042,
+      "avg_time": 0.021424541987168293,
+      "min_time": 0.020761833991855383,
+      "max_time": 0.021991292014718056,
+      "std_dev": 0.0006203206478735596,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 4
     },
-    "speedup_2": 1.635896041344973,
-    "speedup_4": 1.453784497422341,
+    "speedup_2": 2.1944992494229707,
+    "speedup_4": 2.2181746077448357,
     "consistency": false
   },
   {
     "config": "100 files, high complexity",
     "sequential": {
-      "avg_time": 0.23122755566146225,
-      "min_time": 0.21638154203537852,
-      "max_time": 0.24432987498585135,
-      "std_dev": 0.014055521372078059,
+      "avg_time": 0.17626090301200747,
+      "min_time": 0.1629801249364391,
+      "max_time": 0.18930329207796603,
+      "std_dev": 0.013163202652854583,
       "avg_threats": 439,
       "avg_files": 100,
-      "files_per_second": 432.4744069275589
+      "files_per_second": 567.340790221571
     },
     "parallel_2": {
-      "avg_time": 0.13151962465296188,
-      "min_time": 0.12220083305146545,
-      "max_time": 0.13967249996494502,
-      "std_dev": 0.008793992652914176,
+      "avg_time": 0.1029510556642587,
+      "min_time": 0.1002264169510454,
+      "max_time": 0.1071581250289455,
+      "std_dev": 0.0036959903539684094,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 2
     },
     "parallel_4": {
-      "avg_time": 0.12086881961052616,
-      "min_time": 0.11797687492799014,
-      "max_time": 0.1237672499846667,
-      "std_dev": 0.002895192976710228,
+      "avg_time": 0.10321120832425852,
+      "min_time": 0.10024837497621775,
+      "max_time": 0.10567299998365343,
+      "std_dev": 0.0027468019947103892,
       "avg_threats": 0,
       "avg_files": 0,
       "files_per_second": 0.0,
       "workers": 4
     },
-    "speedup_2": 1.7581220770025585,
-    "speedup_4": 1.9130455348744484,
+    "speedup_2": 1.712084464552019,
+    "speedup_4": 1.7077690095270353,
     "consistency": false
   }
 ]

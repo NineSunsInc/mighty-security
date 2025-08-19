@@ -409,7 +409,7 @@ const ScannerPage = () => {
                   <span className="text-3xl">{getThreatLevel(scanResults.threat_score || '0').icon}</span>
                 </div>
                 <div className={`text-3xl font-bold ${getThreatLevel(scanResults.threat_score || '0').textColor}`}>
-                  {scanResults.threat_score || '0'}%
+                  {scanResults.threat_score || '0'}
                 </div>
               </div>
 

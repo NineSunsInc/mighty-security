@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-18 01:20:48",
+  "timestamp": "2025-08-18 17:14:24",
   "mode": "quick",
   "total_servers": 30,
   "results": {
@@ -12,7 +12,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.56
+        "scan_time": 0.55
       },
       {
         "url": "https://github.com/chatmcp/mcp-memory",
@@ -22,7 +22,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.56
+        "scan_time": 0.75
       },
       {
         "url": "https://github.com/c0d3-jay/mcp-memory",
@@ -32,7 +32,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.58
+        "scan_time": 0.57
       },
       {
         "url": "https://github.com/kaiban-ai/mcp-ragbox",
@@ -42,7 +42,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.66
+        "scan_time": 0.51
       },
       {
         "url": "https://github.com/mark3labs/mcp-knowledge-graph-neo4j",
@@ -52,7 +52,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.53
+        "scan_time": 0.66
       }
     ],
     "Gaming": [
@@ -64,7 +64,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.68
+        "scan_time": 0.58
       },
       {
         "url": "https://github.com/cngarrison/mcp-server-yjs-google-drive",
@@ -74,7 +74,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.7
+        "scan_time": 0.56
       },
       {
         "url": "https://github.com/cngarrison/mcp-server-yjs-websocket",
@@ -84,7 +84,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.61
+        "scan_time": 0.48
       },
       {
         "url": "https://github.com/cngarrison/mcp-server-twitch",
@@ -94,7 +94,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.62
+        "scan_time": 0.54
       },
       {
         "url": "https://github.com/cngarrison/mcp-server-epic-games",
@@ -104,7 +104,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.57
+        "scan_time": 0.53
       }
     ],
     "Location Services": [
@@ -116,7 +116,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.63
+        "scan_time": 0.56
       },
       {
         "url": "https://github.com/BritishCryptoGuy/mcp-server-osgrid",
@@ -126,7 +126,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.62
+        "scan_time": 0.68
       },
       {
         "url": "https://github.com/danthegoodman1/mcp-memory",
@@ -136,7 +136,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.55
+        "scan_time": 0.5
       },
       {
         "url": "https://github.com/klaussilveira/mcp-geocode",
@@ -146,7 +146,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.66
+        "scan_time": 0.54
       },
       {
         "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/weather",
@@ -156,7 +156,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.77
+        "scan_time": 0.64
       }
     ],
     "Security": [
@@ -168,7 +168,7 @@
         "threat_score": 14.0,
         "threats_found": 1,
         "error": null,
-        "scan_time": 1.0
+        "scan_time": 0.74
       },
       {
         "url": "https://github.com/atomicchonk/roadrecon_mcp_server",
@@ -178,7 +178,7 @@
         "threat_score": 0.0,
         "threats_found": 0,
         "error": null,
-        "scan_time": 0.96
+        "scan_time": 1.13
       },
       {
         "url": "https://github.com/intruder-io/intruder-mcp",
@@ -188,17 +188,17 @@
         "threat_score": 45.1,
         "threats_found": 4,
         "error": null,
-        "scan_time": 1.17
+        "scan_time": 0.92
       },
       {
         "url": "https://github.com/LaurieWired/GhidraMCP",
         "category": "Security",
         "status": "completed",
         "threat_level": "LOW",
-        "threat_score": 33.5,
+        "threat_score": 32.8,
         "threats_found": 6,
         "error": null,
-        "scan_time": 1.16
+        "scan_time": 3.43
       },
       {
         "url": "https://github.com/qianniuspace/mcp-security-audit",
@@ -208,7 +208,7 @@
         "threat_score": 0.0,
         "threats_found": 0,
         "error": null,
-        "scan_time": 1.61
+        "scan_time": 1.59
       }
     ],
     "Travel & Transportation": [
@@ -220,7 +220,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.58
+        "scan_time": 0.63
       },
       {
         "url": "https://github.com/sunsetcoder/mcp-skyscanner",
@@ -230,7 +230,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.63
+        "scan_time": 0.51
       },
       {
         "url": "https://github.com/sunsetcoder/mcp-travel-assistant",
@@ -240,7 +240,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.65
+        "scan_time": 0.57
       },
       {
         "url": "https://github.com/bhardwajRahul/mcp-flight-tracker",
@@ -250,7 +250,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.62
+        "scan_time": 1.59
       },
       {
         "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/maps",
@@ -260,7 +260,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.77
+        "scan_time": 0.54
       }
     ],
     "Databases": [
@@ -272,7 +272,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.68
+        "scan_time": 0.61
       },
       {
         "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
@@ -282,7 +282,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.69
+        "scan_time": 0.55
       },
       {
         "url": "https://github.com/BasedHardware/Whomane",
@@ -292,7 +292,7 @@
         "threat_score": 0.0,
         "threats_found": 0,
         "error": null,
-        "scan_time": 1.46
+        "scan_time": 1.22
       },
       {
         "url": "https://github.com/ktanaka101/mcp-server-duckdb",
@@ -302,7 +302,7 @@
         "threat_score": 15.0,
         "threats_found": 2,
         "error": null,
-        "scan_time": 1.18
+        "scan_time": 0.75
       },
       {
         "url": "https://github.com/benborla/mcp-server-bigquery",
@@ -312,7 +312,7 @@
         "threat_score": null,
         "threats_found": 0,
         "error": "Could not parse output",
-        "scan_time": 0.58
+        "scan_time": 0.43
       }
     ]
   }

