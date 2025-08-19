@@ -69,18 +69,55 @@ class SecurityValidator:
         if not os.access(abs_path, os.R_OK):
             raise HTTPException(status_code=403, detail="Permission denied")
 
-        # Check if it's in allowed directories (current working directory and subdirs)
+        # Check if it's in allowed directories
         cwd = Path.cwd().resolve()
+        
+        # Find project root by looking for pyproject.toml or .git
+        current = Path(__file__).parent.resolve()
+        project_root = None
+        while current != current.parent:
+            if (current / "pyproject.toml").exists() or (current / ".git").exists():
+                project_root = current
+                break
+            current = current.parent
+        
+        if not project_root:
+            # Fallback to 2 levels up from dashboard
+            project_root = Path(__file__).parent.parent.parent.resolve()
+        
+        # Allow paths within current working directory, project root, or temp dirs
+        allowed = False
+        
+        # Check if path is within cwd
         try:
             abs_path.relative_to(cwd)
+            allowed = True
         except ValueError:
-            # Path is outside current directory - check if it's an allowed system scan
+            pass
+        
+        # Check if path is within project root
+        if not allowed:
+            try:
+                abs_path.relative_to(project_root)
+                allowed = True
+            except ValueError:
+                pass
+        
+        # Check if it's the project root itself
+        if not allowed and abs_path == project_root:
+            allowed = True
+        
+        # Check if it's an allowed system scan directory
+        if not allowed:
             allowed_scan_dirs = ['/tmp', '/var/tmp']
-            if not any(str(abs_path).startswith(allowed_dir) for allowed_dir in allowed_scan_dirs):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Access denied: Path outside allowed directories"
-                )
+            if any(str(abs_path).startswith(allowed_dir) for allowed_dir in allowed_scan_dirs):
+                allowed = True
+        
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Path outside allowed directories"
+            )
 
         return str(abs_path)
 

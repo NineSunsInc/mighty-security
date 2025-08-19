@@ -415,3 +415,127 @@
     align-items: flex-start;
   }
 }
+
+/* Taint Analysis Section */
+.taint-analysis-explanation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.taint-card {
+  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  border: 1px solid rgba(254, 220, 37, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.taint-card:hover {
+  border-color: rgba(254, 220, 37, 0.4);
+  box-shadow: 0 8px 32px rgba(254, 220, 37, 0.1);
+  transform: translateY(-2px);
+}
+
+.taint-card.highlight-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  border: 2px solid var(--goldenYellow);
+  box-shadow: 0 0 40px rgba(254, 220, 37, 0.2);
+}
+
+.taint-title {
+  color: var(--goldenYellow);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.taint-description {
+  color: #b0b0b0;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.taint-example {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(23, 142, 185, 0.3);
+}
+
+.taint-example h4 {
+  color: var(--vividSkyBlue);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.taint-code {
+  display: block;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #e0e0e0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.taint-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.taint-list li {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: #b0b0b0;
+  line-height: 1.5;
+}
+
+.taint-list li:before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--goldenYellow);
+  font-weight: bold;
+}
+
+.taint-list strong {
+  color: var(--vividSkyBlue);
+  font-weight: 600;
+}
+
+.taint-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(254, 220, 37, 0.2);
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-number {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--goldenYellow);
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 20px rgba(254, 220, 37, 0.5);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #b0b0b0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

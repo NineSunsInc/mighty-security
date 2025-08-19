@@ -2032,15 +2032,40 @@ class ComprehensiveMCPAnalyzer:
                 )
                 tainted_flows.append(df)
 
-                # Derive threat indicators for critical flows
+                # Derive threat indicators for ALL tainted flows with high risk
                 sink = (getattr(trace, 'sink_type', '') or '').lower()
                 source = (getattr(trace, 'source_type', '') or '').lower()
-                if sink in ['exec', 'network']:
-                    desc = f"Tainted flow: {source} → {sink}"
+                
+                # Create threats for tainted flows with dangerous sinks
+                if df.is_tainted and df.risk_score >= 0.7:
+                    # Map sink types to attack vectors and CWEs
+                    if sink in ['exec', 'command', 'subprocess']:
+                        attack_vec = AttackVector.COMMAND_INJECTION
+                        severity = ThreatSeverity.CRITICAL
+                        cwe_ids = ['CWE-77', 'CWE-78']
+                    elif sink == 'network':
+                        attack_vec = AttackVector.DATA_EXFILTRATION
+                        severity = ThreatSeverity.HIGH
+                        cwe_ids = ['CWE-918', 'CWE-200']
+                    elif sink == 'file_write':
+                        attack_vec = AttackVector.PATH_TRAVERSAL
+                        severity = ThreatSeverity.HIGH if df.risk_score < 0.9 else ThreatSeverity.CRITICAL
+                        cwe_ids = ['CWE-22', 'CWE-73']
+                    elif sink == 'database':
+                        attack_vec = AttackVector.SQL_INJECTION
+                        severity = ThreatSeverity.HIGH
+                        cwe_ids = ['CWE-89']
+                    else:
+                        # Unknown sink type but still tainted with high risk
+                        attack_vec = AttackVector.UNKNOWN
+                        severity = ThreatSeverity.MEDIUM if df.risk_score < 0.85 else ThreatSeverity.HIGH
+                        cwe_ids = ['CWE-20']
+                    
+                    desc = f"Tainted data flow: {source} → {sink} (risk: {df.risk_score:.0%})"
                     taint_threats.append(ThreatIndicator(
-                        attack_vector=AttackVector.COMMAND_INJECTION if sink == 'exec' else AttackVector.DATA_EXFILTRATION,
-                        severity=ThreatSeverity.CRITICAL if sink == 'exec' else ThreatSeverity.HIGH,
-                        confidence=float(getattr(trace, 'confidence', 0.7)),
+                        attack_vector=attack_vec,
+                        severity=severity,
+                        confidence=df.risk_score,
                         file_path=path_files[0].split(':')[0] if path_files else 'unknown',
                         description=desc,
                         evidence={
@@ -2048,10 +2073,11 @@ class ComprehensiveMCPAnalyzer:
                                 'source': df.source_location,
                                 'sink': df.sink_location,
                                 'path': df.path,
-                                'sanitized': not df.is_tainted
+                                'sanitized': not df.is_tainted,
+                                'risk_score': df.risk_score
                             }
                         },
-                        cwe_ids=['CWE-77'] if sink == 'exec' else ['CWE-918', 'CWE-200']
+                        cwe_ids=cwe_ids
                     ))
             except Exception:
                 continue
