@@ -50,16 +50,12 @@ python3 mighty_mcp.py check <whatever>
 Beautiful React-based security dashboard with real-time monitoring:
 
 ```bash
-# 🔒 SECURE VERSION (RECOMMENDED FOR PRODUCTION)
-python3 src/dashboard/secure_app.py  # http://localhost:8080
-
 # 🛠️ Development mode (React dev server + API proxy)
 cd src/dashboard
 npm install
 npm run dev  # http://localhost:3000 (with API proxy)
 
-# ⚠️ Original version (DEVELOPMENT ONLY - has security issues)
-python3 src/dashboard/app.py  # Use secure_app.py instead!
+python3 src/dashboard/app.py  
 ```
 
 **🔐 Security Features:**
