@@ -143,10 +143,12 @@ class RateLimiter:
     def __init__(self):
         self.requests: dict[str, list[float]] = {}
         self.limits = {
-            '/api/scan/local': (5, 300),      # 5 requests per 5 minutes
-            '/api/scan/github': (3, 300),     # 3 requests per 5 minutes
-            '/api/scan/config-discovery': (10, 60),  # 10 requests per minute
-            'default': (20, 60)               # 20 requests per minute for other endpoints
+            '/api/scan/local': (20, 300),      # 20 requests per 5 minutes
+            '/api/scan/github': (15, 300),     # 15 requests per 5 minutes
+            '/api/scan/config-discovery': (30, 60),  # 30 requests per minute
+            '/api/stats': (100, 60),           # 100 requests per minute for stats
+            '/api/run': (100, 60),             # 100 requests per minute for run details
+            'default': (60, 60)                # 60 requests per minute for other endpoints
         }
 
     def is_allowed(self, client_ip: str, endpoint: str) -> bool:

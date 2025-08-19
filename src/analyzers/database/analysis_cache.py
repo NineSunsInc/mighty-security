@@ -348,7 +348,8 @@ class AnalysisCacheDB:
         report: Any,  # SecurityReport object
         scan_type: str = "deep",
         llm_enabled: bool = False,
-        scan_duration: float = 0.0
+        scan_duration: float = 0.0,
+        original_url: str = None  # Add parameter for original URL
     ) -> str:
         """Save analysis results to database"""
 
@@ -359,11 +360,32 @@ class AnalysisCacheDB:
 
         # Get repository metadata
         metadata = self.get_repository_metadata(repo_path)
+        
+        # Override repo_url with original_url if provided (for GitHub clones)
+        if metadata and original_url and 'github.com' in original_url:
+            import re
+            match = re.search(r'github\.com[/:]([^/]+)/([^/\.]+)', original_url)
+            if match:
+                metadata.repo_url = original_url
+                metadata.repo_name = f"{match.group(1)}/{match.group(2)}"
+        
         if not metadata:
             # Fallback for non-git directories
+            # Use original_url if provided (for GitHub clones in temp directories)
+            repo_url = original_url if original_url else str(repo_path)
+            repo_name = repo_path.name
+            
+            # Extract GitHub repo name if it's a GitHub URL
+            if original_url and 'github.com' in original_url:
+                import re
+                match = re.search(r'github\.com[/:]([^/]+)/([^/\.]+)', original_url)
+                if match:
+                    repo_name = f"{match.group(1)}/{match.group(2)}"
+                    repo_url = original_url
+            
             metadata = RepositoryMetadata(
-                repo_url=str(repo_path),
-                repo_name=repo_path.name,
+                repo_url=repo_url,
+                repo_name=repo_name,
                 latest_commit_sha="no-git",
                 latest_commit_date=datetime.now().isoformat(),
                 branch="none"

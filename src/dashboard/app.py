@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +30,14 @@ if env_file.exists():
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+# Import security middleware
+try:
+    from security_middleware import SecurityValidator, safe_error_handler, security_middleware
+    SECURITY_ENABLED = True
+except ImportError:
+    print("Warning: Security middleware not found, running without enhanced security")
+    SECURITY_ENABLED = False
+
 from src.analyzers.comprehensive_mcp_analyzer import ComprehensiveMCPAnalyzer
 from src.analyzers.database import AnalysisCacheDB
 from src.analyzers.llm.cerebras_analyzer import CerebrasAnalyzer
@@ -41,6 +50,25 @@ app = FastAPI(
     title="Mighty MCP Security Dashboard",
     description="Comprehensive security scanning for MCP tools and configurations",
     version="2.0.0"
+)
+
+# Add security middleware if available
+if SECURITY_ENABLED:
+    app.middleware("http")(security_middleware)
+
+# Add CORS middleware with proper security settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Dev frontend
+        "http://localhost:3002",  # Vite dev server
+        "http://localhost:8080",  # Production frontend
+        "http://localhost:8083",  # Alternative port
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    max_age=3600,
 )
 
 # Mount static files directory
@@ -114,6 +142,16 @@ SCAN_MODES = {
     }
 }
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "security": SECURITY_ENABLED,
+        "timestamp": datetime.now().isoformat()
+    }
+
 @app.get("/")
 async def index():
     """Serve the React app"""
@@ -149,6 +187,13 @@ async def scan_local(request: Request):
 
     if not target_path:
         raise HTTPException(status_code=400, detail="No target path provided")
+
+    # Validate path if security is enabled
+    if SECURITY_ENABLED:
+        try:
+            target_path = SecurityValidator.validate_local_path(target_path)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     try:
         # Use the ACTUAL working analyzer with profile support
@@ -283,6 +328,13 @@ async def scan_github_repo(request: Request):
 
     if not repo_url or 'github.com' not in repo_url:
         raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+
+    # Validate GitHub URL if security is enabled
+    if SECURITY_ENABLED:
+        try:
+            repo_url = SecurityValidator.validate_github_url(repo_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     try:
         # Use the ACTUAL working analyzer that handles GitHub properly with profile support!

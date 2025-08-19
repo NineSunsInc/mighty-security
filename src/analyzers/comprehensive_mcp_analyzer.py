@@ -984,8 +984,15 @@ class ComprehensiveMCPAnalyzer:
         if self.cache_db and self.use_cache:
             try:
                 scan_type = "quick" if not self.deep_scan else "deep"
+                # Use original repo_url for GitHub repos to avoid duplicate entries
+                # For GitHub clones in temp directories, we want to save with the GitHub URL
+                save_path = repo_path
+                if '/tmp/' in str(repo_path) or '/var/folders/' in str(repo_path):
+                    # This is a temp directory from GitHub clone, use the original URL
+                    save_path = Path(repo_url)
+                
                 run_id = self.cache_db.save_analysis(
-                    repo_path=repo_path,
+                    repo_path=save_path,
                     report=report,
                     scan_type=scan_type,
                     llm_enabled=self.enable_llm,
